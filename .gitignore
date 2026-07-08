@@ -1,0 +1,31 @@
+# Log files
+*.log
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Frontend (Next.js)
+frontend/node_modules/
+frontend/.next/
+frontend/out/
+frontend/build/
+frontend/.env
+frontend/.env.local
+frontend/.env.development.local
+frontend/.env.test.local
+frontend/.env.production.local
+
+# Backend (Go)
+backend/main
+backend/.env
+
+# Mobile (Flutter)
+dumpit_mobile/.dart_tool/
+dumpit_mobile/build/
+dumpit_mobile/.flutter-plugins
+dumpit_mobile/.flutter-plugins-dependencies
+dumpit_mobile/.packages
+dumpit_mobile/ios/Flutter/Generated.xcconfig
+dumpit_mobile/ios/Flutter/flutter_export_environment.sh
+dumpit_mobile/android/local.properties
