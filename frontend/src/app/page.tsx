@@ -11,8 +11,8 @@ export default function LandingPage() {
 			{/* 🪐 顶部导航栏 */}
 			<header style={styles.header}>
 				<div style={styles.logoContainer}>
-					<img src="/logo.jpg" alt="DumpIt. Logo" style={styles.logoImg} />
-					<span style={styles.logoText}>DumpIt.</span>
+					<img src="/logo.jpg" alt="BrainVent. Logo" style={styles.logoImg} />
+					<span style={styles.logoText}>BrainVent.</span>
 				</div>
 				<nav style={styles.nav}>
 					<a href="#features" style={styles.navLink}>Features</a>
@@ -55,7 +55,7 @@ export default function LandingPage() {
 						<div style={styles.previewDotRed}></div>
 						<div style={styles.previewDotYellow}></div>
 						<div style={styles.previewDotGreen}></div>
-						<span style={styles.previewTitle}>DumpIt. Dashboard Preview</span>
+						<span style={styles.previewTitle}>BrainVent. Dashboard Preview</span>
 					</div>
 					<div style={styles.previewBody}>
 						<div style={styles.previewRow}>
@@ -201,7 +201,7 @@ export default function LandingPage() {
 
 			{/* 🪐 Footer */}
 			<footer style={styles.footer}>
-				<p>© 2026 DumpIt. All rights reserved. Built for productive minds.</p>
+				<p>© 2026 BrainVent. All rights reserved. Built for productive minds.</p>
 			</footer>
 		</div>
 	);

@@ -398,7 +398,7 @@ export default function Home() {
 				},
 				body: JSON.stringify({
 					license_key: licenseKey,
-					instance_name: "DumpIt Web App Client"
+					instance_name: "BrainVent Web App Client"
 				}),
 			});
 
@@ -407,7 +407,7 @@ export default function Home() {
 				setIsPremium(true);
 				localStorage.setItem("dumpit_is_premium", "true");
 				localStorage.setItem("dumpit_license_key", licenseKey);
-				alert(lang === "zh" ? "🎉 激活成功！欢迎成为 DumpIt. 黄金会员！" : "🎉 Activated successfully! Welcome to DumpIt. Premium!");
+				alert(lang === "zh" ? "🎉 激活成功！欢迎成为 BrainVent. 黄金会员！" : "🎉 Activated successfully! Welcome to BrainVent. Premium!");
 			} else {
 				alert(lang === "zh" ? `⚠️ 激活失败: ${data.error}` : `⚠️ Activation failed: ${data.error}`);
 			}
@@ -860,7 +860,7 @@ export default function Home() {
 
 	// 导出 Markdown
 	const exportToMarkdown = () => {
-		const mdContent = `# DumpIt Restructured - ${new Date().toLocaleString()}
+		const mdContent = `# BrainVent Restructured - ${new Date().toLocaleString()}
 
 ## Summary
 ${summary}
@@ -878,7 +878,7 @@ ${calendarEvents.map(event => `- **${event.title}** (${event.time})`).join("\n")
 		const url = URL.createObjectURL(blob);
 		const link = document.createElement("a");
 		link.href = url;
-		link.setAttribute("download", `DumpIt_Record_${Date.now()}.md`);
+		link.setAttribute("download", `BrainVent_Record_${Date.now()}.md`);
 		document.body.appendChild(link);
 		link.click();
 		document.body.removeChild(link);
@@ -917,9 +917,9 @@ ${calendarEvents.map(event => `- **${event.title}** (${event.time})`).join("\n")
 			<aside className="sidebar">
 				<div className="logo-container" style={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: "4px" }}>
 					<div style={{ display: "flex", alignItems: "center" }}>
-						<img src="/logo.jpg" alt="DumpIt" style={{ width: "30px", height: "30px", borderRadius: "8px", border: "1.5px solid #8B5CF6", marginRight: "6px" }} />
+						<img src="/logo.jpg" alt="BrainVent" style={{ width: "30px", height: "30px", borderRadius: "8px", border: "1.5px solid #8B5CF6", marginRight: "6px" }} />
 						<div className="logo-text">
-							DumpIt<span className="logo-dot">.</span>
+							BrainVent<span className="logo-dot">.</span>
 						</div>
 					</div>
 					{isPremium && (
@@ -977,7 +977,7 @@ ${calendarEvents.map(event => `- **${event.title}** (${event.time})`).join("\n")
 				</ul>
 				
 				<div className="sidebar-footer">
-					DumpIt & KeepIt v2.0.0
+					BrainVent & KeepIt v2.0.0
 				</div>
 			</aside>
 
@@ -1111,7 +1111,7 @@ ${calendarEvents.map(event => `- **${event.title}** (${event.time})`).join("\n")
 									/>
 								</div>
 								<div className="input-group" style={{ marginTop: "10px" }}>
-									<label htmlFor="license-key" style={{ color: "#FBBF24", fontWeight: "bold" }}>{lang === "zh" ? "🔑 DumpIt. 黄金会员激活码 (License Key)" : "🔑 DumpIt. Premium License Key"}</label>
+									<label htmlFor="license-key" style={{ color: "#FBBF24", fontWeight: "bold" }}>{lang === "zh" ? "🔑 BrainVent. 黄金会员激活码 (License Key)" : "🔑 BrainVent. Premium License Key"}</label>
 									<div style={{ display: "flex", gap: "8px", marginTop: "4px" }}>
 										<input
 											id="license-key"

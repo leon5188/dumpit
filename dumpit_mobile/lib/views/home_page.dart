@@ -715,7 +715,7 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
 
         if (mounted) {
           Navigator.of(context).pop(); // 关闭弹窗
-          _showSnackBar(_isZh ? '🎉 激活成功！欢迎成为 DumpIt. 黄金会员！' : '🎉 Activated successfully! Welcome to DumpIt. Premium!');
+          _showSnackBar(_isZh ? '🎉 激活成功！欢迎成为 BrainVent. 黄金会员！' : '🎉 Activated successfully! Welcome to BrainVent. Premium!');
         }
       } else {
         _showSnackBar(_isZh ? '⚠️ 激活码无效或已被核销' : '⚠️ Invalid or expired license key');
@@ -733,7 +733,7 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
         return AlertDialog(
           backgroundColor: const Color(0xFF1E1E2F),
           title: Text(
-            _isZh ? '🔑 激活 DumpIt. 黄金会员' : '🔑 Activate DumpIt. Premium',
+            _isZh ? '🔑 激活 BrainVent. 黄金会员' : '🔑 Activate BrainVent. Premium',
             style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
           ),
           content: Column(
@@ -826,7 +826,7 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
             ),
             const SizedBox(width: 8),
             const Text(
-              'DumpIt.',
+              'BrainVent.',
               style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, letterSpacing: 1.2),
             ),
             if (_isPremium) ...[

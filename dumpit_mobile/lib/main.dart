@@ -2,16 +2,16 @@ import 'package:flutter/material.dart';
 import 'views/home_page.dart';
 
 void main() {
-  runApp(const DumpItApp());
+  runApp(const BrainVentApp());
 }
 
-class DumpItApp extends StatelessWidget {
-  const DumpItApp({super.key});
+class BrainVentApp extends StatelessWidget {
+  const BrainVentApp({super.key});
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'DumpIt',
+      title: 'BrainVent',
       debugShowCheckedModeBanner: false,
       
       // 🔮 深度暗黑治愈系主题配色 (对应 Web 端的 globals.css 设计系统)

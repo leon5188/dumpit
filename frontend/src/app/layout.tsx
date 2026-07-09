@@ -13,8 +13,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "DumpIt. | Voice Brain Dump to Notion - ADHD Friendly Productivity App",
-  description: "Tired of blank-page procrastination? Open your mic and dump chaotic thoughts. DumpIt. automatically filters noise, clones your tone, generates action item lists, and syncs directly to Notion in 1-click.",
+  title: "BrainVent. | Voice Brain Dump to Notion - ADHD Friendly Productivity App",
+  description: "Tired of blank-page procrastination? Open your mic and dump chaotic thoughts. BrainVent. automatically filters noise, clones your tone, generates action item lists, and syncs directly to Notion in 1-click.",
   keywords: [
     "voice to notion",
     "brain dump template",
@@ -24,17 +24,17 @@ export const metadata: Metadata = {
     "tone cloning AI",
     "notion sync automation"
   ],
-  authors: [{ name: "DumpIt Team" }],
+  authors: [{ name: "BrainVent Team" }],
   openGraph: {
-    title: "DumpIt. | Voice Brain Dump to Notion",
-    description: "Tired of blank-page procrastination? Open your mic and dump chaotic thoughts. DumpIt. automatically filters noise, clones your tone, generates action items, and syncs directly to Notion in 1-click.",
-    url: "https://dumpit.site",
-    siteName: "DumpIt. - ADHD Brain Dump",
+    title: "BrainVent. | Voice Brain Dump to Notion",
+    description: "Tired of blank-page procrastination? Open your mic and dump chaotic thoughts. BrainVent. automatically filters noise, clones your tone, generates action items, and syncs directly to Notion in 1-click.",
+    url: "https://dump-it.net",
+    siteName: "BrainVent. - ADHD Brain Dump",
     type: "website",
   },
   twitter: {
     card: "summary_large_image",
-    title: "DumpIt. | Voice Brain Dump to Notion",
+    title: "BrainVent. | Voice Brain Dump to Notion",
     description: "Open your mic, dump chaotic thoughts. AI structures, tone-clones, and syncs to Notion in 1-click.",
   }
 };
