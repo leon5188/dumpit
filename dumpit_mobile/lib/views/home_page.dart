@@ -44,7 +44,9 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
   String? _localAudioPath;
 
   // 状态与指令
-  String _status = 'idle'; // 'idle', 'recording', 'uploading', 'done', '  final TextEditingController _toneController = TextEditingController();
+  String _status = 'idle'; // 'idle', 'recording', 'uploading', 'done', 'error'
+  String _errorMsg = '';
+  final TextEditingController _toneController = TextEditingController();
   final TextEditingController _promptController = TextEditingController();
   final TextEditingController _ipController = TextEditingController();
   final TextEditingController _notionTokenController = TextEditingController();
