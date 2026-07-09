@@ -1,7 +1,10 @@
 # ---------------------------------------------------
 # Stage 1: Build the Go binary
 # ---------------------------------------------------
-FROM golang:1.21-alpine AS builder
+FROM golang:alpine AS builder
+
+# 设置 Go 全球代理加速，并支持 direct 回退，防范网络堵塞超时
+ENV GOPROXY=https://goproxy.io,direct
 
 # 安装构建依赖以支持部分 cgo（如需要）
 RUN apk add --no-cache git ca-certificates
