@@ -280,7 +280,13 @@ export default function Home() {
 			setErrorMessage("");
 		} catch (err: any) {
 			console.error("Mic error", err);
-			setErrorMessage(lang === "zh" ? "无法访问麦克风，请检查浏览器权限！" : "Failed to access mic, check settings!");
+			let errMsg = lang === "zh" ? "无法访问麦克风，请检查浏览器权限！" : "Failed to access mic, check settings!";
+			if (!navigator.mediaDevices) {
+				errMsg = lang === "zh"
+					? "⚠️ 浏览器安全策略限制：当前非 HTTPS 或 localhost 环境，浏览器已禁止网页访问麦克风。请使用 localhost (http://localhost:3000) 进行本地访问，或为您的域名配置 HTTPS！"
+					: "⚠️ Security restriction: navigator.mediaDevices is undefined. Please access via localhost or HTTPS!";
+			}
+			setErrorMessage(errMsg);
 			setStatus("error");
 		}
 	};

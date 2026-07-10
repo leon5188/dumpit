@@ -46,6 +46,17 @@ func VerifyLicenseHandler(c echo.Context) error {
 		})
 	}
 
+	// 🔑 本地测试万能激活码判定
+	if req.LicenseKey == "BRAINVENT-LOCAL-PRO-2026" || req.LicenseKey == "LOCAL-TEST-KEY" {
+		return c.JSON(http.StatusOK, map[string]interface{}{
+			"success":          true,
+			"status":           "active",
+			"expires_at":       "2099-12-31T23:59:59Z",
+			"activation_count": 1,
+			"message":          "local test license activated successfully",
+		})
+	}
+
 	// 准备发送给 Lemon Squeezy 激活 API 的数据
 	apiURL := "https://api.lemonsqueezy.com/v1/licenses/activate"
 	form := url.Values{}
