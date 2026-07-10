@@ -24,6 +24,17 @@ interface HistoryRecord {
 }
 
 export default function Home() {
+	// 🌐 动态计算后端基准 API URL，兼容本地/局域网及 HTTPS 部署防止 Mixed Content 拦截
+	const getBackendUrl = (path: string): string => {
+		if (typeof window === "undefined") return `http://localhost:8080${path}`;
+		if (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1") {
+			return `http://localhost:8080${path}`;
+		}
+		const protocol = window.location.protocol;
+		const hostname = window.location.hostname;
+		return `${protocol}//${hostname}:8080${path}`;
+	};
+
 	// 多语言控制
 	const [lang, setLang] = useState<"zh" | "en">("zh");
 	const t = translations[lang];
@@ -152,7 +163,7 @@ export default function Home() {
 		alert(lang === "zh" ? "正在同步到 Notion..." : "Syncing to Notion...");
 
 		try {
-			const res = await fetch("http://localhost:8080/api/notion/sync", {
+			const res = await fetch(getBackendUrl("/api/notion/sync"), {
 				method: "POST",
 				headers: {
 					"Content-Type": "application/json",
@@ -191,7 +202,7 @@ export default function Home() {
 		alert(lang === "zh" ? "正在连接支付中心校验激活码..." : "Verifying license key with payment center...");
 
 		try {
-			const res = await fetch("http://localhost:8080/api/license/verify", {
+			const res = await fetch(getBackendUrl("/api/license/verify"), {
 				method: "POST",
 				headers: {
 					"Content-Type": "application/json",
@@ -348,7 +359,7 @@ export default function Home() {
 				formData.append("user_tone_sample", record.toneSample || "");
 				formData.append("custom_prompt", record.prompt || "");
 
-				const response = await fetch("http://localhost:8080/api/process-audio", {
+				const response = await fetch(getBackendUrl("/api/process-audio"), {
 					method: "POST",
 					body: formData,
 				});
@@ -398,7 +409,7 @@ export default function Home() {
 		formData.append("custom_prompt", customPrompt);
 
 		try {
-			const response = await fetch("http://localhost:8080/api/process-audio", {
+			const response = await fetch(getBackendUrl("/api/process-audio"), {
 				method: "POST",
 				body: formData,
 			});
