@@ -24,8 +24,15 @@ interface HistoryRecord {
 }
 
 export default function Home() {
-	// 🌐 动态计算后端基准 API URL，兼容本地/局域网及 HTTPS 部署防止 Mixed Content 拦截
+	// 🌐 动态计算后端基准 API URL，优先使用用户配置的自定义基准地址，兼容本地/局域网及 HTTPS 部署
 	const getBackendUrl = (path: string): string => {
+		if (typeof window !== "undefined") {
+			const savedUrl = localStorage.getItem("dumpit_backend_url");
+			if (savedUrl) {
+				const cleanBase = savedUrl.endsWith("/") ? savedUrl.slice(0, -1) : savedUrl;
+				return `${cleanBase}${path}`;
+			}
+		}
 		if (typeof window === "undefined") return `http://localhost:8080${path}`;
 		if (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1") {
 			return `http://localhost:8080${path}`;
@@ -55,6 +62,7 @@ export default function Home() {
 	const [notionToken, setNotionToken] = useState("");
 	const [notionPageId, setNotionPageId] = useState("");
 	const [licenseKey, setLicenseKey] = useState("");
+	const [customBackendUrl, setCustomBackendUrl] = useState("");
 	const [isPremium, setIsPremium] = useState(false);
 	const [showConfig, setShowConfig] = useState(false);
 	const [showGuide, setShowGuide] = useState(true);
@@ -110,6 +118,9 @@ export default function Home() {
 
 			const savedLicenseKey = localStorage.getItem("dumpit_license_key");
 			if (savedLicenseKey) setLicenseKey(savedLicenseKey);
+
+			const savedBackendUrl = localStorage.getItem("dumpit_backend_url");
+			if (savedBackendUrl) setCustomBackendUrl(savedBackendUrl);
 
 			const savedIsPremium = localStorage.getItem("dumpit_is_premium");
 			if (savedIsPremium === "true") setIsPremium(true);
@@ -447,7 +458,10 @@ export default function Home() {
 			showToast(t.toastSuccess);
 		} catch (err: any) {
 			console.error("Processing failed", err);
-			setErrorMessage(err.message || "Service temporarily offline.");
+			const targetUrl = getBackendUrl("/api/process-audio");
+			setErrorMessage(lang === "zh"
+				? `⚠️ 语音处理连接失败 (${err.message})。请检查您的后端服务器是否正常运行在 ${targetUrl} 并已开启跨域(CORS)！`
+				: `⚠️ Connect failed (${err.message}). Check if your backend runs at ${targetUrl} with CORS enabled!`);
 			setStatus("error");
 		}
 	};
@@ -818,6 +832,21 @@ ${calendarEvents.map(event => `- **${event.title}** (${event.time})`).join("\n")
 										onChange={(e) => {
 											setNotionPageId(e.target.value);
 											localStorage.setItem("dumpit_notion_page_id", e.target.value);
+										}}
+										style={{ background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.08)", color: "#fff", padding: "0.5rem", borderRadius: "8px", outline: "none", fontSize: "12px", marginTop: "4px" }}
+									/>
+								</div>
+								<div className="input-group" style={{ marginTop: "10px" }}>
+									<label htmlFor="custom-backend-url" style={{ color: "#10B981", fontWeight: "bold" }}>{lang === "zh" ? "🌐 Go 后端 API 基准地址" : "🌐 Go Backend API Base URL"}</label>
+									<input
+										id="custom-backend-url"
+										type="text"
+										className="input-field"
+										placeholder="e.g. http://localhost:8080"
+										value={customBackendUrl}
+										onChange={(e) => {
+											setCustomBackendUrl(e.target.value);
+											localStorage.setItem("dumpit_backend_url", e.target.value);
 										}}
 										style={{ background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.08)", color: "#fff", padding: "0.5rem", borderRadius: "8px", outline: "none", fontSize: "12px", marginTop: "4px" }}
 									/>
