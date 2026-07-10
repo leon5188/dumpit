@@ -1,16 +1,16 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
-import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:record/record.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../models/history_record.dart';
 import '../../services/api_service.dart';
-import 'widgets/mind_web_view.dart';
-import 'widgets/timeline_view.dart';
-import 'widgets/todo_manager.dart';
+import '../../services/device_sync_service.dart';
+import '../translations.dart';
+import 'widgets/restructured_details_sheet.dart';
+import 'widgets/config_dialogs.dart';
 
 class ToolLink {
   final String text;
@@ -42,6 +42,8 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
   int _recordingDuration = 0;
   Timer? _timer;
   String? _localAudioPath;
+  double _currentAmplitude = 0.0;
+  StreamSubscription<Amplitude>? _amplitudeSubscription;
 
   // 状态与指令
   String _status = 'idle'; // 'idle', 'recording', 'uploading', 'done', 'error'
@@ -113,11 +115,32 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
   void initState() {
     super.initState();
     _loadLocalSettings();
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      final url = await DeviceSyncService.getLaunchUrl();
+      if (url != null) {
+        _handleLaunchUrl(url);
+      }
+    });
+  }
+
+  // 处理外部 Scheme 唤醒
+  void _handleLaunchUrl(String url) {
+    try {
+      final uri = Uri.parse(url);
+      if (uri.scheme == 'brainvent') {
+        if (uri.host == 'record' || uri.queryParameters['action'] == 'start') {
+          if (!_isRecording) {
+            _startRecording();
+          }
+        }
+      }
+    } catch (_) {}
   }
 
   @override
   void dispose() {
     _audioRecorder.dispose();
+    _amplitudeSubscription?.cancel();
     _timer?.cancel();
     _scrollController.dispose();
     _toneController.dispose();
@@ -271,7 +294,7 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
       builder: (context) {
-        return _RestructuredDetailsSheet(
+        return RestructuredDetailsSheet(
           isZh: _isZh,
           summary: _summary,
           actionItems: _actionItems,
@@ -379,6 +402,12 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
           _errorMsg = '';
         });
         _startTimer();
+        _amplitudeSubscription = _audioRecorder.onAmplitudeChanged(const Duration(milliseconds: 100)).listen((amp) {
+          setState(() {
+            double normalized = (amp.current + 50.0) / 50.0;
+            _currentAmplitude = normalized.clamp(0.0, 1.0);
+          });
+        });
       } else {
         setState(() {
           _status = 'error';
@@ -395,9 +424,12 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
 
   Future<void> _stopRecording() async {
     _stopTimer();
+    _amplitudeSubscription?.cancel();
+    _amplitudeSubscription = null;
     final path = await _audioRecorder.stop();
     setState(() {
       _isRecording = false;
+      _currentAmplitude = 0.0;
     });
 
     if (path != null && _localAudioPath != null) {
@@ -600,7 +632,14 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
 
   // 配置局域网 IP
   void _showIpConfig() {
-    _showIpDialog();
+    ConfigDialogs.showIpDialog(
+      context: context,
+      isZh: _isZh,
+      ipController: _ipController,
+      onSaved: (ip) {
+        _showSnackBar(_isZh ? '后端连接已重定向' : 'API Redirected');
+      },
+    );
   }
 
   // 🕒 格式化计时器
@@ -636,158 +675,6 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
           ),
         ),
       ),
-    );
-  }
-
-  // ⚙️ 弹出 IP 局域网配置对话框
-  void _showIpDialog() {
-    _ipController.text = ApiService.baseUrl.replaceFirst('http://', '').replaceFirst(':8080', '');
-    showDialog(
-      context: context,
-      builder: (context) {
-        return AlertDialog(
-          backgroundColor: const Color(0xFF1E1E2F),
-          title: Text(
-            _isZh ? '⚙️ 配置局域网 Go 后端 IP' : '⚙️ Config Backend IP',
-            style: const TextStyle(color: Colors.white, fontSize: 16),
-          ),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                _isZh ? '如果使用的是手机真机联调，请输入电脑的局域网 IP 以连接后端。' : 'Enter your PC local IP to sync from physical devices.',
-                style: const TextStyle(color: Colors.grey, fontSize: 12),
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: _ipController,
-                decoration: InputDecoration(
-                  hintText: 'e.g., 192.168.1.100',
-                  hintStyle: const TextStyle(color: Colors.grey, fontSize: 13),
-                  filled: true,
-                  fillColor: Colors.black.withOpacity(0.3),
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-                ),
-                style: const TextStyle(color: Colors.white, fontSize: 14),
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Cancel', style: TextStyle(color: Colors.grey)),
-            ),
-            ElevatedButton(
-              onPressed: () {
-                ApiService.setBaseUrl(_ipController.text.trim());
-                Navigator.pop(context);
-                _showSnackBar(_isZh ? '后端连接已重定向' : 'API Redirected');
-              },
-              style: ElevatedButton.styleFrom(backgroundColor: Colors.purpleAccent),
-              child: const Text('Save'),
-            ),
-          ],
-        );
-      },
-    );
-  }
-
-  // 🔒 激活码校验与核销
-  Future<void> _verifyLicenseKey() async {
-    final key = _licenseKeyController.text.trim();
-    if (key.isEmpty) {
-      _showSnackBar(_isZh ? '⚠️ 激活码不能为空' : '⚠️ License key cannot be empty');
-      return;
-    }
-
-    _showSnackBar(_isZh ? '正在连接支付中心校验激活码...' : 'Verifying license key...');
-
-    try {
-      final success = await ApiService.verifyLicense(key);
-      if (success) {
-        final prefs = await SharedPreferences.getInstance();
-        await prefs.setBool('dumpit_is_premium', true);
-        await prefs.setString('dumpit_license_key', key);
-        
-        setState(() {
-          _isPremium = true;
-        });
-
-        if (mounted) {
-          Navigator.of(context).pop(); // 关闭弹窗
-          _showSnackBar(_isZh ? '🎉 激活成功！欢迎成为 BrainVent. 黄金会员！' : '🎉 Activated successfully! Welcome to BrainVent. Premium!');
-        }
-      } else {
-        _showSnackBar(_isZh ? '⚠️ 激活码无效或已被核销' : '⚠️ Invalid or expired license key');
-      }
-    } catch (e) {
-      _showSnackBar(_isZh ? '⚠️ 激活失败: ${e.toString().replaceAll('Exception: ', '')}' : '⚠️ Activation failed: $e');
-    }
-  }
-
-  // 🔑 弹出激活 License 对话框
-  void _showLicenseDialog() {
-    showDialog(
-      context: context,
-      builder: (context) {
-        return AlertDialog(
-          backgroundColor: const Color(0xFF1E1E2F),
-          title: Text(
-            _isZh ? '🔑 激活 BrainVent. 黄金会员' : '🔑 Activate BrainVent. Premium',
-            style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
-          ),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                _isZh 
-                    ? '请输入您购买后获得的激活码，即可解锁无限次 AI 整理和 Notion 一键云同步特权。' 
-                    : 'Enter your license key to unlock unlimited dumps & Notion sync.',
-                style: const TextStyle(color: Colors.grey, fontSize: 12, height: 1.4),
-              ),
-              const SizedBox(height: 16),
-              TextField(
-                controller: _licenseKeyController,
-                obscureText: true,
-                decoration: InputDecoration(
-                  hintText: 'e.g., LSQ-...',
-                  hintStyle: const TextStyle(color: Colors.grey, fontSize: 13),
-                  filled: true,
-                  fillColor: Colors.black.withOpacity(0.3),
-                  focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(8),
-                    borderSide: const BorderSide(color: Colors.amber),
-                  ),
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-                ),
-                style: const TextStyle(color: Colors.white, fontSize: 14),
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: Text(
-                _isZh ? '取消' : 'Cancel',
-                style: const TextStyle(color: Colors.grey),
-              ),
-            ),
-            ElevatedButton(
-              onPressed: _verifyLicenseKey,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.amber,
-                foregroundColor: Colors.black,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-              ),
-              child: Text(
-                _isZh ? '激活' : 'Activate',
-                style: const TextStyle(fontWeight: FontWeight.bold),
-              ),
-            ),
-          ],
-        );
-      },
     );
   }
 
@@ -926,7 +813,17 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
                 child: GestureDetector(
                   onTap: () {
                     Navigator.of(context).pop(); // 先关闭侧边栏
-                    _showLicenseDialog(); // 弹出激活框
+                    ConfigDialogs.showLicenseDialog(
+                      context: context,
+                      isZh: _isZh,
+                      licenseKeyController: _licenseKeyController,
+                      onActivated: (key) {
+                        setState(() {
+                          _isPremium = true;
+                        });
+                      },
+                      showSnackBar: _showSnackBar,
+                    );
                   },
                   child: Container(
                     padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
@@ -1190,7 +1087,7 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
               }
             },
             child: AnimatedContainer(
-              duration: const Duration(milliseconds: 300),
+              duration: const Duration(milliseconds: 100), // 缩短响应时长为 100ms 以紧密贴合音量
               width: 84,
               height: 84,
               decoration: BoxDecoration(
@@ -1203,8 +1100,8 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
                 boxShadow: [
                   BoxShadow(
                     color: activeColor.withOpacity(0.4),
-                    blurRadius: _isRecording ? 25 : 12,
-                    spreadRadius: _isRecording ? 6 : 2,
+                    blurRadius: _isRecording ? (25.0 + _currentAmplitude * 20.0) : 12.0,
+                    spreadRadius: _isRecording ? (6.0 + _currentAmplitude * 8.0) : 2.0,
                   ),
                 ],
               ),
@@ -1564,197 +1461,4 @@ class _BrainWavePainter extends CustomPainter {
   bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
 
-// 📑 嵌套 TabView 的 AI 梳理详情 BottomSheet 浮层组件
-class _RestructuredDetailsSheet extends StatefulWidget {
-  final bool isZh;
-  final String summary;
-  final List<String> actionItems;
-  final List<String> keyInsights;
-  final List<CalendarEvent> calendarEvents;
-  final VoidCallback onArchive;
-  final VoidCallback onDestroy;
-  final VoidCallback onSyncNotion;
-  final Function(List<String>) onTodosChanged;
 
-  const _RestructuredDetailsSheet({
-    required this.isZh,
-    required this.summary,
-    required this.actionItems,
-    required this.keyInsights,
-    required this.calendarEvents,
-    required this.onArchive,
-    required this.onDestroy,
-    required this.onSyncNotion,
-    required this.onTodosChanged,
-  });
-
-  @override
-  State<_RestructuredDetailsSheet> createState() => _RestructuredDetailsSheetState();
-}
-
-class _RestructuredDetailsSheetState extends State<_RestructuredDetailsSheet> with SingleTickerProviderStateMixin {
-  late TabController _sheetTabController;
-
-  @override
-  void initState() {
-    super.initState();
-    _sheetTabController = TabController(length: 4, vsync: this);
-  }
-
-  @override
-  void dispose() {
-    _sheetTabController.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      height: MediaQuery.of(context).size.height * 0.8, // 占屏幕 80% 高度
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      child: Column(
-        children: [
-          // 顶部收折条
-          Container(
-            width: 36,
-            height: 4,
-            decoration: BoxDecoration(
-              color: Colors.white12,
-              borderRadius: BorderRadius.circular(2),
-            ),
-          ),
-          const SizedBox(height: 16),
-          // 按钮与动作
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                widget.isZh ? '🧠 DumpRestructured' : '🧠 restructurer result',
-                style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
-              ),
-              Row(
-                children: [
-                  IconButton(
-                    icon: const Icon(Icons.bolt, color: Colors.amberAccent, size: 20),
-                    onPressed: widget.onSyncNotion,
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.archive_outlined, color: Colors.grey, size: 20),
-                    onPressed: widget.onArchive,
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.delete_outline, color: Colors.redAccent, size: 20),
-                    onPressed: widget.onDestroy,
-                  ),
-                ],
-              )
-            ],
-          ),
-          // 霓虹 TabBar
-          TabBar(
-            controller: _sheetTabController,
-            indicatorColor: Colors.purpleAccent,
-            labelColor: Colors.purpleAccent,
-            unselectedLabelColor: Colors.grey,
-            tabs: [
-              Tab(text: widget.isZh ? '📝 重构' : '📝 Summary'),
-              Tab(text: widget.isZh ? '✅ 待办' : '✅ Todos'),
-              Tab(text: widget.isZh ? '🕸️ 网状图' : '🕸️ Web'),
-              Tab(text: widget.isZh ? '📅 时间轴' : '📅 Timeline'),
-            ],
-          ),
-          const SizedBox(height: 16),
-          Expanded(
-            child: TabBarView(
-              controller: _sheetTabController,
-              children: [
-                // Tab 1: 整理文
-                SingleChildScrollView(
-                  child: Text(
-                    widget.summary,
-                    style: const TextStyle(fontSize: 14, height: 1.6, color: Colors.white),
-                  ),
-                ),
-                // Tab 2: 待办清单
-                TodoManager(
-                  actionItems: widget.actionItems,
-                  onTodosChanged: widget.onTodosChanged,
-                ),
-                // Tab 3: 可拖拽网状图
-                MindWebView(
-                  keyInsights: widget.keyInsights,
-                  actionItems: widget.actionItems,
-                ),
-                // Tab 4: 纵向时间轴日程
-                TimelineView(events: widget.calendarEvents),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-// 国际化静态资源
-class HomeTranslations {
-  static const Map<String, dynamic> zh = {
-    'guideHeader': '💡 大脑整理心流指南 (Mind Flow Guide)',
-    'guide1Title': '1. 无过滤记录',
-    'guide1Desc': '快速说出或写下所有点子、待办或情绪。不要管对错和顺序。就像打开水龙头，让水流出来。',
-    'guide1Tools': [
-      ToolLink(text: '🎤 触发原生录音', actionId: 'focus-recorder'),
-    ],
-    'guide2Title': '2. 思维解构',
-    'guide2Desc': '把大问题拆成小碎块。比如，把“写报告”拆成“查资料”、“写大纲”、“填内容”三步。这能降低大脑的压力。',
-    'guide2Tools': [
-      ToolLink(text: '📋 切换至原生待办', actionId: 'focus-todo'),
-    ],
-    'guide3Title': '3. 可视化关联',
-    'guide3Desc': '无需下载Xmind，AI会根据你的灵感与任务，自动绘制一个可交互拖拽的发光网状想法图，看清思维链路。',
-    'guide3Tools': [
-      ToolLink(text: '🕸️ 查看连线网状图', actionId: 'focus-web'),
-    ],
-    'guide4Title': '4. 分类与清洗',
-    'guide4Desc': '一键理清你的心流。有用的灵感一键归档归仓，无用的多余杂音直接粉碎粉末，告别信息堆积焦虑。',
-    'guide4Tools': [
-      ToolLink(text: '📂 一键归档保险箱', actionId: 'direct-archive'),
-      ToolLink(text: '💥 回收站粉碎数据', actionId: 'direct-destroy'),
-    ],
-    'guide5Title': '5. 行动转化',
-    'guide5Desc': '将想法变成具体的下一步时间点。例如，把“学做饭”变成“今晚去超市买西红柿和鸡蛋”，在时间轴上有序排列。',
-    'guide5Tools': [
-      ToolLink(text: '📅 查看原生时间轴', actionId: 'focus-calendar'),
-    ],
-  };
-
-  static const Map<String, dynamic> en = {
-    'guideHeader': '💡 Mind Flow Guide (ADHD Friendly)',
-    'guide1Title': '1. Free Output',
-    'guide1Desc': 'Jot down all ideas, tasks, or emotions. Ignore correctness and order. Like opening a tap to let water flow.',
-    'guide1Tools': [
-      ToolLink(text: '🎤 Start Native Mic', actionId: 'focus-recorder'),
-    ],
-    'guide2Title': '2. Deconstruct',
-    'guide2Desc': 'Break big goals into micro-tasks. Turn "write report" into "research", "outline", and "draft" to reduce mental friction.',
-    'guide2Tools': [
-      ToolLink(text: '📋 Switch to Todo', actionId: 'focus-todo'),
-    ],
-    'guide3Title': '3. Visual Connection',
-    'guide3Desc': 'No Xmind required. AI automatically maps your insights & tasks into an interactive dragging web diagram.',
-    'guide3Tools': [
-      ToolLink(text: '🕸️ View Mind Web', actionId: 'focus-web'),
-    ],
-    'guide4Title': '4. Sort & Clean',
-    'guide4Desc': 'Clean up your thoughts in seconds. Archive valuable insights to Vault and shred useless noise to Trash.',
-    'guide4Tools': [
-      ToolLink(text: '📂 Archive to Vault', actionId: 'direct-archive'),
-      ToolLink(text: '💥 Move to Trash', actionId: 'direct-destroy'),
-    ],
-    'guide5Title': '5. Action Translation',
-    'guide5Desc': 'Translate vague thoughts into concrete timelines. See tasks automatically mapped onto a linear timeline.',
-    'guide5Tools': [
-      ToolLink(text: '📅 View Timeline', actionId: 'focus-calendar'),
-    ],
-  };
-}

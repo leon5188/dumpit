@@ -44,7 +44,7 @@ func main() {
 	e.GET("/health", func(c echo.Context) error {
 		return c.JSON(http.StatusOK, map[string]string{
 			"status":  "ok",
-			"message": "DumpIt & KeepIt API is running",
+			"message": "BrainVent API is running",
 		})
 	})
 

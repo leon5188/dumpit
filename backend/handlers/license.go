@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"time"
 
 	"github.com/labstack/echo/v4"
 )
@@ -21,12 +22,12 @@ type LemonSqueezyResponse struct {
 	Activated bool   `json:"activated"`
 	Error     string `json:"error"`
 	LicenseKey struct {
-		ID             int    `json:"id"`
-		Status         string `json:"status"`
-		Key            string `json:"key"`
-		ActivationLimit int   `json:"activation_limit"`
-		ActivationCount int   `json:"activation_count"`
-		ExpiresAt      string `json:"expires_at"`
+		ID              int    `json:"id"`
+		Status          string `json:"status"`
+		Key             string `json:"key"`
+		ActivationLimit int    `json:"activation_limit"`
+		ActivationCount int    `json:"activation_count"`
+		ExpiresAt       string `json:"expires_at"`
 	} `json:"license_key"`
 }
 
@@ -51,12 +52,12 @@ func VerifyLicenseHandler(c echo.Context) error {
 	form.Set("license_key", req.LicenseKey)
 	instanceName := req.InstanceName
 	if instanceName == "" {
-		instanceName = "DumpIt User Client"
+		instanceName = "BrainVent User Client"
 	}
 	form.Set("instance_name", instanceName)
 
-	// 创建 HTTP 请求
-	httpReq, err := http.NewRequest("POST", apiURL, strings.NewReader(form.Encode()))
+	// 创建 HTTP 请求（使用 Context 绑定生命周期，支持在连接中断时中止内部请求）
+	httpReq, err := http.NewRequestWithContext(c.Request().Context(), "POST", apiURL, strings.NewReader(form.Encode()))
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]string{
 			"error": "failed to create license activation request: " + err.Error(),
@@ -67,8 +68,10 @@ func VerifyLicenseHandler(c echo.Context) error {
 	httpReq.Header.Set("Accept", "application/json")
 	httpReq.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 
-	// 执行请求
-	client := &http.Client{}
+	// 执行请求，配置 10 秒超时防止请求挂起僵死
+	client := &http.Client{
+		Timeout: 10 * time.Second,
+	}
 	resp, err := client.Do(httpReq)
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]string{

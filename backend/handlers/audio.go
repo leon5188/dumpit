@@ -2,6 +2,9 @@ package handlers
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
+	"fmt"
 	"io"
 	"net/http"
 	"os"
@@ -20,6 +23,15 @@ func NewAudioHandler(openAIService *services.OpenAIService) *AudioHandler {
 	return &AudioHandler{
 		openAIService: openAIService,
 	}
+}
+
+// generateRandomHex 生成指定长度的随机十六进制字符串
+func generateRandomHex(n int) (string, error) {
+	bytes := make([]byte, n)
+	if _, err := rand.Read(bytes); err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(bytes), nil
 }
 
 // UploadAndProcessAudio 处理音频文件上传并调用 AI 进行整理
@@ -56,7 +68,11 @@ func (h *AudioHandler) UploadAndProcessAudio(c echo.Context) error {
 	if ext == "" {
 		ext = ".wav" // 默认扩展名
 	}
-	tempFileName := filepath.Join(tempDir, filepath.Base(file.Filename))
+	randomName, err := generateRandomHex(16)
+	if err != nil {
+		randomName = fmt.Sprintf("%d", time.Now().UnixNano())
+	}
+	tempFileName := filepath.Join(tempDir, randomName+ext)
 	dst, err := os.Create(tempFileName)
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]string{

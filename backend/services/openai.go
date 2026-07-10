@@ -52,7 +52,7 @@ func (s *OpenAIService) TranscribeAudio(ctx context.Context, audioFilePath strin
 // RestructureDump 利用 GPT 根据用户风格重构脑力倾倒文本，返回结构化的 JSON 数据
 func (s *OpenAIService) RestructureDump(ctx context.Context, rawText string, userToneSample string, customPrompt string) (*ProcessedDump, error) {
 	// 默认的系统提示词，确立 AI 角色与重组规则
-	systemPrompt := `你是一个专业的 ADHD 友好大脑整理助手（DumpIt & KeepIt）。
+	systemPrompt := `你是一个专业的 ADHD 友好大脑整理助手（BrainVent）。
 用户的输入是他们脑力倾倒（Brain Dump）时杂乱无章的语音转文字，包含大量语气词、错别字、重复和逻辑跳跃的话。
 
 你的任务是将其整理成以下四部分，并严格以指定的 JSON 格式返回：

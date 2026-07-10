@@ -1,36 +1,13 @@
 "use client";
 
 import React, { useState, useEffect, useRef } from "react";
+import { translations, CalendarEvent, ToolLink } from "./locales";
+import MindWeb from "./components/MindWeb";
+import TodoManager from "./components/TodoManager";
+import TimelineView from "./components/TimelineView";
+import GlobalMindLandscape from "./components/GlobalMindLandscape";
 
-// 日程安排接口
-interface CalendarEvent {
-	title: string;
-	time: string;
-}
-
-// 推荐工具链接结构
-interface ToolLink {
-	text: string;
-	url?: string;
-	actionId?: string;
-}
-
-// 拓扑节点结构
-interface GraphNode {
-	id: string;
-	label: string;
-	type: "insight" | "todo";
-	x: number;
-	y: number;
-}
-
-// 拓扑连线结构
-interface GraphEdge {
-	source: string;
-	target: string;
-}
-
-// 升级版历史记录接口 (新增分类支持)
+// 历史记录接口
 interface HistoryRecord {
 	id: string;
 	timestamp: string;
@@ -40,182 +17,11 @@ interface HistoryRecord {
 	keyInsights: string[];
 	calendarEvents: CalendarEvent[];
 	status?: "done" | "offline_pending" | "syncing" | "error";
-	folder?: "inbox" | "archive" | "trash"; // 新增：文件夹分类
+	folder?: "inbox" | "archive" | "trash";
 	offlineAudio?: string;
 	toneSample?: string;
 	prompt?: string;
 }
-
-// i18n 字典升级 (把大厂工具替换为自研原生工具)
-const translations = {
-	zh: {
-		title: "把混乱想法交给我",
-		subtitle: "点击录音，开启无压力的脑力倾倒。AI 会自动过滤赘词并克隆您的文风。",
-		placeholderTone: "在此贴入您平时随手写的、带有自己强烈口头语或措辞风格的段落，AI 将克隆您的文风...",
-		placeholderPrompt: "例如：请翻译成英文、主要关注里面的周报内容、用大纲形式呈现...",
-		startRecord: "点击上方麦克风开始录音",
-		recording: "倾倒中，再次点击按钮完成整理...",
-		uploading: "AI 正在进行智能语气克隆与多维度整理，请稍候...",
-		emptyAudio: "未检测到明显的语音内容，请重新录音倾倒。",
-		historyTitle: "历史记录",
-		noHistory: "暂无记录",
-		configLabel: "展开偏好与文风设置（克隆语气）",
-		configLabelActive: "收起偏好与文风设置",
-		toneSampleLabel: "我的写作与表达风格参考样例（AI 会以此文风重构）：",
-		promptLabel: "本次处理的额外指令/要求（选填）：",
-		toastSuccess: "脑力倾倒整理成功！",
-		toastOffline: "当前处于离线状态，录音已安全保存在本地。",
-		toastOfflineSync: "检测到网络已恢复，自动同步离线倾倒记录...",
-		toastSyncSuccess: "离线记录同步成功！",
-		toastLoadSuccess: "历史记录加载成功",
-		toastCopy: "整理文本已复制到剪贴板",
-		toastExport: "成功导出为 Markdown 文件",
-		toastDestroy: "记录已放入回收站！",
-		toastDeleteForever: "记录已永久粉碎！",
-		toastArchive: "记录已成功移入保险箱！",
-		offlineBanner: "📶 当前处于离线状态 — 您的所有脑力倾倒将安全保存在本地浏览器中。",
-		offlineBadge: "离线模式",
-		syncingSummary: "🔄 正在自动同步中...",
-		syncFailed: "⚠️ 同步失败，等待下次尝试",
-		offlinePendingSummary: "⏳ 离线保存：等待网络连接恢复后自动同步...",
-		summaryTitle: "📝 语气重构整理",
-		copyBtn: "复制内容",
-		exportBtn: "📥 导出 Markdown",
-		notionSyncBtn: "⚡ 同步到 Notion",
-		archiveBtn: "📂 归档到保险箱",
-		destroyBtn: "🗑️ 移入回收站",
-		deleteForeverBtn: "💥 永久销毁",
-		todoTitle: "✅ 原生待办事项管理器",
-		noTodo: "双击这里或下方添加你的第一个具体行动...",
-		todoPlaceholder: "输入具体行动，回车添加...",
-		calendarTitle: "📅 原生时间轴行动日程",
-		noCalendar: "未提取到日程，请录音倾倒包含时间的任务",
-		insightTitle: "💡 闪光创意卡片",
-		noInsight: "未识别到突出创意点",
-		mindWebTitle: "🕸️ 原生脑力网状关联图",
-		guideHeader: "💡 大脑整理心流指南 (Mind Flow Guide)",
-		
-		// 5大原生卡片指南
-		guide1Title: "1. 无过滤记录",
-		guide1Desc: "快速说出或写下所有点子、待办或情绪。不要管对错和顺序。就像打开水龙头，让水流出来。",
-		guide1Label: "原生工具：",
-		guide1Tools: [
-			{ text: "🎤 点击聚焦麦克风", actionId: "focus-recorder" }
-		] as ToolLink[],
-		
-		guide2Title: "2. 思维解构",
-		guide2Desc: "把大问题拆成小碎块。比如，把“写报告”拆成“查资料”、“写大纲”、“填内容”三步。这能降低大脑的压力。",
-		guide2Label: "原生工具：",
-		guide2Tools: [
-			{ text: "📋 使用内置待办面板", actionId: "focus-todo" }
-		] as ToolLink[],
-		
-		guide3Title: "3. 可视化关联",
-		guide3Desc: "无需下载Xmind，AI会根据你的灵感与任务，自动绘制一个可交互拖拽的发光网状想法图，看清思维链路。",
-		guide3Label: "原生工具：",
-		guide3Tools: [
-			{ text: "🕸️ 聚焦内置网状图", actionId: "focus-web" }
-		] as ToolLink[],
-		
-		guide4Title: "4. 分类与清洗",
-		guide4Desc: "一键理清你的心流。有用的灵感一键归档归仓，无用的多余杂音直接粉碎粉末，告别信息堆积焦虑。",
-		guide4Label: "原生工具：",
-		guide4Tools: [
-			{ text: "📂 归档到本地保险箱", actionId: "direct-archive" },
-			{ text: "💥 永久销毁垃圾信息", actionId: "direct-destroy" }
-		] as ToolLink[],
-		
-		guide5Title: "5. 行动转化",
-		guide5Desc: "将想法变成具体的下一步时间点。例如，把“学做饭”变成“今晚去超市买西红柿和鸡蛋”，在时间轴上有序排列。",
-		guide5Label: "原生工具：",
-		guide5Tools: [
-			{ text: "📅 聚焦内置时间轴", actionId: "focus-calendar" }
-		] as ToolLink[]
-	},
-	en: {
-		title: "Dump Your Chaos",
-		subtitle: "Click record to start stress-free brain dumping. AI will filter noise and clone your tone.",
-		placeholderTone: "Paste your typical writing style sample here. AI will clone this style...",
-		placeholderPrompt: "e.g., Translate to English, focus on weekly report items, output as a humorous outline...",
-		startRecord: "Click the microphone above to start recording",
-		recording: "Dumping in progress, click again to restructure...",
-		uploading: "AI is cloning your tone and restructuring your mind, please wait...",
-		emptyAudio: "No clear audio detected, please try recording again.",
-		historyTitle: "Dumps List",
-		noHistory: "No records",
-		configLabel: "Expand Preferences & Tone Setting",
-		configLabelActive: "Collapse Preferences & Tone Setting",
-		toneSampleLabel: "My writing style sample (AI will mimic this style):",
-		promptLabel: "Extra prompt/instructions for this dump (optional):",
-		toastSuccess: "Brain dump restructured successfully!",
-		toastOffline: "Offline mode. Recording saved locally.",
-		toastOfflineSync: "Network restored, automatically syncing offline records...",
-		toastSyncSuccess: "Offline record synced successfully!",
-		toastLoadSuccess: "History loaded",
-		toastCopy: "Copied to clipboard",
-		toastExport: "Successfully exported Markdown",
-		toastDestroy: "Sent to Trash!",
-		toastDeleteForever: "Permanently destroyed!",
-		toastArchive: "Archived to Vault!",
-		offlineBanner: "📶 Currently Offline — Your dumps are safely stored in your local browser.",
-		offlineBadge: "offline mode",
-		syncingSummary: "🔄 Auto syncing...",
-		syncFailed: "⚠️ Sync failed, waiting for next attempt",
-		offlinePendingSummary: "⏳ Saved Offline: Waiting for network connection to sync...",
-		summaryTitle: "📝 Restructured Summary",
-		copyBtn: "Copy Text",
-		exportBtn: "📥 Export MD",
-		notionSyncBtn: "⚡ Sync to Notion",
-		archiveBtn: "📂 Archive to Vault",
-		destroyBtn: "🗑️ Move to Trash",
-		deleteForeverBtn: "💥 Destroy Forever",
-		todoTitle: "✅ Native Todo Manager",
-		noTodo: "Double-click here or add your first task below...",
-		todoPlaceholder: "Enter task and press enter...",
-		calendarTitle: "📅 Native Action Timeline",
-		noCalendar: "No schedules found. Try dumping events with times",
-		insightTitle: "💡 Key Insights",
-		noInsight: "No creative insights found",
-		mindWebTitle: "🕸️ Native Mind Web (Interactive)",
-		guideHeader: "💡 Mind Flow Guide (ADHD Friendly)",
-		
-		guide1Title: "1. Free Output",
-		guide1Desc: "Jot down all ideas, tasks, or emotions. Ignore correctness and order. Like opening a tap to let water flow.",
-		guide1Label: "Tools:",
-		guide1Tools: [
-			{ text: "🎤 Focus Mic", actionId: "focus-recorder" }
-		] as ToolLink[],
-		
-		guide2Title: "2. Deconstruct",
-		guide2Desc: "Break big goals into micro-tasks. Turn 'write report' into 'research', 'outline', and 'draft' to reduce mental friction.",
-		guide2Label: "Tools:",
-		guide2Tools: [
-			{ text: "📋 Open Native Todo", actionId: "focus-todo" }
-		] as ToolLink[],
-		
-		guide3Title: "3. Visual Connection",
-		guide3Desc: "No Xmind required. AI automatically maps your insights & tasks into an interactive dragging web diagram.",
-		guide3Label: "Tools:",
-		guide3Tools: [
-			{ text: "🕸️ Focus Mind Web", actionId: "focus-web" }
-		] as ToolLink[],
-		
-		guide4Title: "4. Sort & Clean",
-		guide4Desc: "Clean up your thoughts in seconds. Archive valuable insights to Vault and shred useless noise to Trash.",
-		guide4Label: "Tools:",
-		guide4Tools: [
-			{ text: "📂 Archive to Vault", actionId: "direct-archive" },
-			{ text: "💥 Permanent Destroy", actionId: "direct-destroy" }
-		] as ToolLink[],
-		
-		guide5Title: "5. Action Translation",
-		guide5Desc: "Translate vague thoughts into concrete timelines. See tasks automatically mapped onto a linear timeline.",
-		guide5Label: "Tools:",
-		guide5Tools: [
-			{ text: "📅 Focus Timeline", actionId: "focus-calendar" }
-		] as ToolLink[]
-	}
-};
 
 export default function Home() {
 	// 多语言控制
@@ -241,19 +47,13 @@ export default function Home() {
 	const [isPremium, setIsPremium] = useState(false);
 	const [showConfig, setShowConfig] = useState(false);
 	const [showGuide, setShowGuide] = useState(true);
+	const [showGlobalLandscape, setShowGlobalLandscape] = useState(false);
 
 	// 当前处理结果
 	const [summary, setSummary] = useState("");
 	const [actionItems, setActionItems] = useState<string[]>([]);
-	const [newTodoText, setNewTodoText] = useState(""); // 新待办输入
-	const [checkedItems, setCheckedItems] = useState<Record<number, boolean>>({});
 	const [keyInsights, setKeyInsights] = useState<string[]>([]);
 	const [calendarEvents, setCalendarEvents] = useState<CalendarEvent[]>([]);
-
-	// 🕸️ 原生拓扑网状图状态
-	const [nodes, setNodes] = useState<GraphNode[]>([]);
-	const [edges, setEdges] = useState<GraphEdge[]>([]);
-	const [draggedNodeId, setDraggedNodeId] = useState<string | null>(null);
 
 	// 历史记录
 	const [historyList, setHistoryList] = useState<HistoryRecord[]>([]);
@@ -416,84 +216,6 @@ export default function Home() {
 		}
 	};
 
-	// 2. 自动构建 SVG 拓扑网状节点（圆周坐标分布）
-	useEffect(() => {
-		if (summary && (keyInsights.length > 0 || actionItems.length > 0)) {
-			const newNodes: GraphNode[] = [];
-			const newEdges: GraphEdge[] = [];
-			
-			const centerX = 250;
-			const centerY = 190;
-			const radius = 100;
-			
-			const totalItems = keyInsights.length + actionItems.length;
-			
-			keyInsights.forEach((insight, idx) => {
-				const angle = (idx / totalItems) * 2 * Math.PI;
-				newNodes.push({
-					id: `insight-${idx}`,
-					label: insight.length > 15 ? insight.slice(0, 15) + "..." : insight,
-					type: "insight",
-					x: centerX + radius * Math.cos(angle),
-					y: centerY + radius * Math.sin(angle),
-				});
-			});
-			
-			actionItems.forEach((todo, idx) => {
-				const angle = ((keyInsights.length + idx) / totalItems) * 2 * Math.PI;
-				newNodes.push({
-					id: `todo-${idx}`,
-					label: todo.length > 15 ? todo.slice(0, 15) + "..." : todo,
-					type: "todo",
-					x: centerX + radius * Math.cos(angle),
-					y: centerY + radius * Math.sin(angle),
-				});
-			});
-			
-			// 建立连接边结构（让节点串联成网状）
-			for (let i = 0; i < newNodes.length; i++) {
-				newEdges.push({
-					source: newNodes[i].id,
-					target: newNodes[(i + 1) % newNodes.length].id,
-				});
-				if (newNodes[i].type === "todo" && newNodes.length > 2) {
-					newEdges.push({
-						source: newNodes[i].id,
-						target: newNodes[0].id,
-					});
-				}
-			}
-			
-			setNodes(newNodes);
-			setEdges(newEdges);
-		} else {
-			setNodes([]);
-			setEdges([]);
-		}
-	}, [summary, keyInsights, actionItems]);
-
-	// 3. SVG 节点拖拽事件绑定
-	const handleMouseDown = (nodeId: string) => {
-		setDraggedNodeId(nodeId);
-	};
-
-	const handleMouseMove = (e: React.MouseEvent<SVGSVGElement>) => {
-		if (!draggedNodeId) return;
-		const rect = e.currentTarget.getBoundingClientRect();
-		const mouseX = e.clientX - rect.left;
-		const mouseY = e.clientY - rect.top;
-		
-		setNodes((prev) =>
-			prev.map((node) =>
-				node.id === draggedNodeId ? { ...node, x: mouseX, y: mouseY } : node
-			)
-		);
-	};
-
-	const handleMouseUp = () => {
-		setDraggedNodeId(null);
-	};
-
 	// 4. 录音计时
 	useEffect(() => {
 		if (isRecording) {
@@ -588,7 +310,7 @@ export default function Home() {
 				keyInsights: [],
 				calendarEvents: [],
 				status: "offline_pending",
-				folder: "inbox", // 默认在 Inbox
+				folder: "inbox",
 				offlineAudio: base64Audio,
 				toneSample: userToneSample,
 				prompt: customPrompt,
@@ -682,14 +404,11 @@ export default function Home() {
 
 			const data = await response.json();
 
-			// 填充当前状态
 			setSummary(data.summary);
 			setActionItems(data.action_items || []);
 			setKeyInsights(data.key_insights || []);
 			setCalendarEvents(data.calendar_events || []);
-			setCheckedItems({});
 
-			// 写入历史数据库
 			const newRecord: HistoryRecord = {
 				id: Date.now().toString(),
 				timestamp: new Date().toLocaleString(),
@@ -699,7 +418,7 @@ export default function Home() {
 				keyInsights: data.key_insights || [],
 				calendarEvents: data.calendar_events || [],
 				status: "done",
-				folder: "inbox", // 默认放入收件箱
+				folder: "inbox",
 			};
 
 			const updatedHistory = [newRecord, ...historyList].slice(0, 50);
@@ -722,7 +441,6 @@ export default function Home() {
 		setActionItems(record.actionItems || []);
 		setKeyInsights(record.keyInsights || []);
 		setCalendarEvents(record.calendarEvents || []);
-		setCheckedItems({});
 		setActiveRecordId(record.id);
 		setStatus(record.status === "offline_pending" ? "idle" : "done");
 		if (record.status === "offline_pending") {
@@ -732,7 +450,7 @@ export default function Home() {
 		}
 	};
 
-	// 11. 归档到本地保险箱 (Notion 替代方案)
+	// 11. 归档到本地保险箱
 	const archiveRecord = () => {
 		if (!activeRecordId) return;
 		const updated = historyList.map(r => r.id === activeRecordId ? { ...r, folder: "archive" as const } : r);
@@ -740,27 +458,23 @@ export default function Home() {
 		localStorage.setItem("dumpit_history", JSON.stringify(updated));
 		showToast(t.toastArchive);
 		
-		// 归档后清空当前视图
 		setSummary("");
 		setActionItems([]);
 		setKeyInsights([]);
 		setCalendarEvents([]);
-		setCheckedItems({});
 		setActiveRecordId(null);
 		setStatus("idle");
 	};
 
-	// 12. 移入回收站/永久删除 (粉碎动作升级)
+	// 12. 移入回收站/永久删除
 	const destroyRecord = () => {
 		if (!activeRecordId) return;
 		
 		let updated: HistoryRecord[] = [];
 		if (sidebarFolder === "trash") {
-			// 如果已经在垃圾桶里，点击粉碎代表【永久删除】
 			updated = historyList.filter(r => r.id !== activeRecordId);
 			showToast(t.toastDeleteForever);
 		} else {
-			// 在 Inbox 或 Archive 里，点击粉碎代表【移入回收站】
 			updated = historyList.map(r => r.id === activeRecordId ? { ...r, folder: "trash" as const } : r);
 			showToast(t.toastDestroy);
 		}
@@ -772,45 +486,13 @@ export default function Home() {
 		setActionItems([]);
 		setKeyInsights([]);
 		setCalendarEvents([]);
-		setCheckedItems({});
 		setActiveRecordId(null);
 		setStatus("idle");
 	};
 
-	// 【功能升级】：待办管理器的添加和删除 (代替滴答清单)
-	const handleAddTodo = (e: React.FormEvent) => {
-		e.preventDefault();
-		if (!newTodoText.trim()) return;
-		
-		const updatedTodos = [...actionItems, newTodoText.trim()];
+	// 监听待办组件修改同步历史库
+	const handleTodosChange = (updatedTodos: string[]) => {
 		setActionItems(updatedTodos);
-		setNewTodoText("");
-
-		// 同步更新本地历史数据库中的这条记录
-		if (activeRecordId) {
-			const updated = historyList.map(r => r.id === activeRecordId ? { ...r, actionItems: updatedTodos } : r);
-			setHistoryList(updated);
-			localStorage.setItem("dumpit_history", JSON.stringify(updated));
-		}
-	};
-
-	const handleDeleteTodo = (indexToDelete: number, e: React.MouseEvent) => {
-		e.stopPropagation(); // 防止触发 todo 勾选事件
-		const updatedTodos = actionItems.filter((_, idx) => idx !== indexToDelete);
-		setActionItems(updatedTodos);
-
-		// 重置 checkedItems 的索引映射
-		const newChecked: Record<number, boolean> = {};
-		Object.entries(checkedItems).forEach(([key, val]) => {
-			const numericKey = parseInt(key, 10);
-			if (numericKey < indexToDelete) {
-				newChecked[numericKey] = val;
-			} else if (numericKey > indexToDelete) {
-				newChecked[numericKey - 1] = val;
-			}
-		});
-		setCheckedItems(newChecked);
-
 		if (activeRecordId) {
 			const updated = historyList.map(r => r.id === activeRecordId ? { ...r, actionItems: updatedTodos } : r);
 			setHistoryList(updated);
@@ -866,7 +548,7 @@ export default function Home() {
 ${summary}
 
 ## Action Items
-${actionItems.map((item, idx) => `- [${checkedItems[idx] ? "x" : " "}] ${item}`).join("\n")}
+${actionItems.map((item) => `- [ ] ${item}`).join("\n")}
 
 ## Key Insights
 ${keyInsights.map(item => `- ${item}`).join("\n")}
@@ -890,13 +572,6 @@ ${calendarEvents.map(event => `- **${event.title}** (${event.time})`).join("\n")
 		showToast(t.toastCopy);
 	};
 
-	const toggleTodo = (index: number) => {
-		setCheckedItems((prev) => ({
-			...prev,
-			[index]: !prev[index],
-		}));
-	};
-
 	const formatTime = (seconds: number) => {
 		const mins = Math.floor(seconds / 60);
 		const secs = seconds % 60;
@@ -908,7 +583,6 @@ ${calendarEvents.map(event => `- **${event.title}** (${event.time})`).join("\n")
 		setTimeout(() => setToastMessage(""), 3000);
 	};
 
-	// 过滤出对应侧边栏文件夹下的历史记录
 	const filteredHistory = historyList.filter(record => (record.folder || "inbox") === sidebarFolder);
 
 	return (
@@ -929,7 +603,6 @@ ${calendarEvents.map(event => `- **${event.title}** (${event.time})`).join("\n")
 					)}
 				</div>
 
-				{/* 【功能升级】：Inbox / Archive / Trash 本地分类箱 */}
 				<div className="sidebar-tabs">
 					<button 
 						className={`sidebar-tab-btn ${sidebarFolder === "inbox" ? "active" : ""}`}
@@ -976,21 +649,43 @@ ${calendarEvents.map(event => `- **${event.title}** (${event.time})`).join("\n")
 					)}
 				</ul>
 				
-				<div className="sidebar-footer">
-					BrainVent & KeepIt v2.0.0
+				<div className="sidebar-footer" style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
+					<button 
+						className="sidebar-tab-btn" 
+						style={{ 
+							width: "100%", 
+							background: "rgba(139, 92, 246, 0.1)", 
+							border: "1px solid rgba(139, 92, 246, 0.3)", 
+							color: "#a78bfa", 
+							display: "flex", 
+							alignItems: "center", 
+							justifyContent: "center", 
+							gap: "0.5rem",
+							padding: "0.5rem",
+							borderRadius: "8px",
+							cursor: "pointer",
+							fontSize: "0.85rem",
+							fontWeight: "bold",
+							boxShadow: "0 0 10px rgba(139, 92, 246, 0.1)"
+						}}
+						onClick={() => setShowGlobalLandscape(true)}
+					>
+						🌌 {lang === "zh" ? "查看全局脑力星空" : "View Global Landscape"}
+					</button>
+					<div style={{ textAlign: "center", opacity: 0.5, fontSize: "0.75rem" }}>
+						BrainVent & KeepIt v2.0.0
+					</div>
 				</div>
 			</aside>
 
 			{/* 主内容区 */}
 			<main className="main-content">
-				{/* 语言切换 */}
 				<div className="top-nav">
 					<button className="lang-switch-btn" onClick={toggleLanguage}>
 						🌐 {lang === "zh" ? "English" : "简体中文"}
 					</button>
 				</div>
 
-				{/* 离线通知 */}
 				{!isOnline && (
 					<div className="offline-banner">
 						<div>
@@ -1119,9 +814,7 @@ ${calendarEvents.map(event => `- **${event.title}** (${event.time})`).join("\n")
 											className="input-field"
 											placeholder="e.g. LSQ-..."
 											value={licenseKey}
-											onChange={(e) => {
-												setLicenseKey(e.target.value);
-											}}
+											onChange={(e) => setLicenseKey(e.target.value)}
 											style={{ flex: 1, background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.08)", color: "#fff", padding: "0.5rem", borderRadius: "8px", outline: "none", fontSize: "12px" }}
 										/>
 										<button 
@@ -1155,7 +848,6 @@ ${calendarEvents.map(event => `- **${event.title}** (${event.time})`).join("\n")
 										{t.notionSyncBtn}
 									</button>
 									
-									{/* 【功能升级】：原生归档与删除/彻底粉碎按钮 */}
 									<button className="panel-action-btn" onClick={archiveRecord}>
 										{t.archiveBtn}
 									</button>
@@ -1166,134 +858,41 @@ ${calendarEvents.map(event => `- **${event.title}** (${event.time})`).join("\n")
 							</div>
 							<div className="summary-content" style={{ whiteSpace: "pre-wrap", lineHeight: "1.6" }}>{summary}</div>
 							
-							{/* 【功能升级】：原生发光的拖拽拓扑想法网络图 (Mind Web) */}
-							<div ref={mindWebRef} className="panel-header" style={{ marginTop: "2rem", marginBottom: "0.5rem" }}>
-								<h2 className="panel-title">{t.mindWebTitle}</h2>
-							</div>
-							<div className="mind-web-container">
-								<svg 
-									className="mind-web-svg" 
-									onMouseMove={handleMouseMove} 
-									onMouseUp={handleMouseUp}
-									onMouseLeave={handleMouseUp}
-								>
-									{/* 渲染线连接 */}
-									{edges.map((edge, idx) => {
-										const sourceNode = nodes.find(n => n.id === edge.source);
-										const targetNode = nodes.find(n => n.id === edge.target);
-										if (!sourceNode || !targetNode) return null;
-										return (
-											<line
-												key={idx}
-												className="edge-line"
-												x1={sourceNode.x}
-												y1={sourceNode.y}
-												x2={targetNode.x}
-												y2={targetNode.y}
-											/>
-										);
-									})}
-									
-									{/* 渲染发光的点和文本 */}
-									{nodes.map((node) => (
-										<g
-											key={node.id}
-											className="node-group"
-											transform={`translate(${node.x}, ${node.y})`}
-											onMouseDown={() => handleMouseDown(node.id)}
-										>
-											<circle
-												className="node-circle"
-												r="7"
-												fill={node.type === "insight" ? "var(--color-primary)" : "var(--color-success)"}
-												style={{ filter: "drop-shadow(0px 0px 4px rgba(139, 92, 246, 0.6))" }}
-											/>
-											<text
-												className="node-text"
-												dx="12"
-												dy="4"
-											>
-												{node.label}
-											</text>
-										</g>
-									))}
-								</svg>
+							{/* SVG 拓扑图独立组件 */}
+							<div ref={mindWebRef}>
+								<MindWeb 
+									summary={summary} 
+									keyInsights={keyInsights} 
+									actionItems={actionItems} 
+									title={t.mindWebTitle}
+								/>
 							</div>
 						</div>
 
-						{/* 右侧边栏：待办、日程与灵感 */}
+						{/* 右侧面板：待办、日程与灵感 */}
 						<div style={{ display: "flex", alignSelf: "stretch", flexDirection: "column", gap: "2rem" }}>
 							
-							{/* 【功能升级】：原生交互待办管理器 */}
-							<div ref={todoCardRef} className="glass-panel">
-								<div className="panel-header">
-									<h2 className="panel-title">{t.todoTitle}</h2>
-								</div>
-								
-								<div className="todo-list">
-									{actionItems.length === 0 ? (
-										<div style={{ color: "var(--text-dark)", fontSize: "0.85rem", padding: "0.5rem 0" }}>{t.noTodo}</div>
-									) : (
-										actionItems.map((todo, idx) => (
-											<div key={idx} className="todo-item" onClick={() => toggleTodo(idx)}>
-												<div className={`todo-checkbox ${checkedItems[idx] ? "checked" : ""}`}>
-													{checkedItems[idx] && "✓"}
-												</div>
-												<span className="todo-text">{todo}</span>
-												
-												{/* 手动删除待办 */}
-												<button 
-													className="todo-item-delete"
-													onClick={(e) => handleDeleteTodo(idx, e)}
-													title="Delete task"
-												>
-													×
-												</button>
-											</div>
-										))
-									)}
-								</div>
-
-								{/* 添加待办输入表单 */}
-								<form className="todo-input-container" onSubmit={handleAddTodo}>
-									<input
-										type="text"
-										className="todo-add-input"
-										placeholder={t.todoPlaceholder}
-										value={newTodoText}
-										onChange={(e) => setNewTodoText(e.target.value)}
-									/>
-									<button type="submit" className="todo-add-btn">+</button>
-								</form>
+							{/* 原生交互待办管理器组件 */}
+							<div ref={todoCardRef}>
+								<TodoManager 
+									actionItems={actionItems}
+									todoTitle={t.todoTitle}
+									noTodo={t.noTodo}
+									todoPlaceholder={t.todoPlaceholder}
+									onTodosChange={handleTodosChange}
+								/>
 							</div>
 
-							{/* 【功能升级】：纵向时间轴日程安排 */}
-							<div ref={calendarCardRef} className="glass-panel">
-								<div className="panel-header">
-									<h2 className="panel-title">{t.calendarTitle}</h2>
-								</div>
-								{calendarEvents.length === 0 ? (
-									<div style={{ color: "var(--text-dark)", fontSize: "0.9rem" }}>{t.noCalendar}</div>
-								) : (
-									<div className="timeline-container">
-										<div className="timeline-line"></div>
-										{calendarEvents.map((event, idx) => (
-											<div key={idx} className="timeline-item">
-												<div className="timeline-badge"></div>
-												<div className="timeline-content">
-													<div className="timeline-title">{event.title}</div>
-													<div className="timeline-time">
-														<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
-														{event.time}
-													</div>
-												</div>
-											</div>
-										))}
-									</div>
-								)}
+							{/* 时间轴日程安排组件 */}
+							<div ref={calendarCardRef}>
+								<TimelineView 
+									calendarEvents={calendarEvents}
+									calendarTitle={t.calendarTitle}
+									noCalendar={t.noCalendar}
+								/>
 							</div>
 
-							{/* 灵感创意 */}
+							{/* 灵感创意卡片 */}
 							<div className="glass-panel">
 								<div className="panel-header">
 									<h2 className="panel-title">{t.insightTitle}</h2>
@@ -1314,7 +913,7 @@ ${calendarEvents.map(event => `- **${event.title}** (${event.time})`).join("\n")
 					</section>
 				)}
 
-				{/* 💡 大脑整理心流指南 (Mind Flow Guide) */}
+				{/* 💡 大脑整理心流指南 */}
 				<section className="guide-section">
 					<div className="guide-section-header" onClick={() => setShowGuide(!showGuide)}>
 						<h2 className="guide-section-title">
@@ -1424,6 +1023,14 @@ ${calendarEvents.map(event => `- **${event.title}** (${event.time})`).join("\n")
 				<div className="toast">
 					{toastMessage}
 				</div>
+			)}
+
+			{showGlobalLandscape && (
+				<GlobalMindLandscape
+					historyList={historyList}
+					isZh={lang === "zh"}
+					onClose={() => setShowGlobalLandscape(false)}
+				/>
 			)}
 		</div>
 	);

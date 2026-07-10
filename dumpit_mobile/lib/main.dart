@@ -1,7 +1,25 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:path_provider/path_provider.dart';
 import 'views/home_page.dart';
 
+void _cleanLegacyTempFiles() async {
+  try {
+    final tempDir = await getTemporaryDirectory();
+    if (await tempDir.exists()) {
+      await for (final entity in tempDir.list(recursive: false, followLinks: false)) {
+        if (entity is File && (entity.path.contains('/dump_') || entity.path.endsWith('.m4a'))) {
+          await entity.delete();
+          debugPrint('🧹 Cleared legacy temp audio dump: ${entity.path}');
+        }
+      }
+    }
+  } catch (_) {}
+}
+
 void main() {
+  WidgetsFlutterBinding.ensureInitialized();
+  _cleanLegacyTempFiles();
   runApp(const BrainVentApp());
 }
 

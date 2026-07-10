@@ -174,7 +174,7 @@ func (s *NotionService) SyncToNotion(req NotionSyncRequest) error {
 				"title": []map[string]interface{}{
 					{
 						"text": map[string]interface{}{
-							"content": fmt.Sprintf("🧠 DumpIt. Mind Restructured (%s)", nowStr),
+							"content": fmt.Sprintf("🧠 BrainVent. Mind Restructured (%s)", nowStr),
 						},
 					},
 				},
