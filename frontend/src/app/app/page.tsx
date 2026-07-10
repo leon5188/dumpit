@@ -33,6 +33,12 @@ export default function Home() {
 				return `${cleanBase}${path}`;
 			}
 		}
+		// 🌍 读取生产部署环境变量作为默认值（如部署在 Render 上）
+		const defaultEnvUrl = process.env.NEXT_PUBLIC_API_URL;
+		if (defaultEnvUrl) {
+			const cleanEnv = defaultEnvUrl.endsWith("/") ? defaultEnvUrl.slice(0, -1) : defaultEnvUrl;
+			return `${cleanEnv}${path}`;
+		}
 		if (typeof window === "undefined") return `http://localhost:8080${path}`;
 		if (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1") {
 			return `http://localhost:8080${path}`;
