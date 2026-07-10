@@ -47,6 +47,12 @@ func main() {
 			"message": "BrainVent API is running",
 		})
 	})
+	e.GET("/", func(c echo.Context) error {
+		return c.JSON(http.StatusOK, map[string]string{
+			"status":  "ok",
+			"message": "BrainVent API is running",
+		})
+	})
 
 	// 核心业务路由
 	e.POST("/api/process-audio", audioHandler.UploadAndProcessAudio)
