@@ -70,7 +70,11 @@ class BinauralPlayer {
     _ application: UIApplication,
     didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?
   ) -> Bool {
-    let controller : FlutterViewController = window?.rootViewController as! FlutterViewController
+    let result = super.application(application, didFinishLaunchingWithOptions: launchOptions)
+    
+    guard let controller = window?.rootViewController as? FlutterViewController else {
+      return result
+    }
     let syncChannel = FlutterMethodChannel(name: "com.brainvent.app/device_sync",
                                               binaryMessenger: controller.binaryMessenger)
     
@@ -104,7 +108,7 @@ class BinauralPlayer {
       }
     })
 
-    return super.application(application, didFinishLaunchingWithOptions: launchOptions)
+    return result
   }
 
   override func application(
@@ -133,11 +137,17 @@ class BinauralPlayer {
         return
       }
       
+      // 安全获取或回退提醒日历，防止 nil 导致解包崩溃
+      guard let calendar = store.defaultCalendarForNewReminders() ?? store.calendars(for: .reminder).first else {
+        result(FlutterError(code: "CALENDAR_ERROR", message: "No default or existing reminder calendar found", details: nil))
+        return
+      }
+      
       var successCount = 0
       for item in items {
         let reminder = EKReminder(eventStore: store)
         reminder.title = item
-        reminder.calendar = store.defaultCalendarForNewReminders()
+        reminder.calendar = calendar
         
         do {
           try store.save(reminder, commit: false)
