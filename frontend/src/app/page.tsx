@@ -30,13 +30,13 @@ export default function LandingPage() {
 				<div style={styles.glow2}></div>
 
 				<div style={styles.heroContent}>
-					<div style={styles.tagLine}>⚡ ADHD & EXPERT FRIENDLY</div>
+					<div style={styles.tagLine}>⚡ FOR ADHD, CREATORS & OVERTHINKERS</div>
 					<h1 style={styles.heroTitle}>
 						Jot Down Chaos.<br />
 						Let AI <span style={styles.gradientText}>Restructure Your Mind</span>.
 					</h1>
 					<p style={styles.heroSubtitle}>
-						Open your mic, dump everything out. No filters, no edits. AI filters noise, clones your tone, and syncs directly to Notion in 1-click.
+						Open your mic, dump everything out. No filters, no edits. AI filters out the filler words, structures your thoughts, and syncs to Notion in 1-click.
 					</p>
 
 					<div style={styles.heroActions}>
@@ -64,9 +64,9 @@ export default function LandingPage() {
 						</div>
 						<div style={styles.previewChart}>
 							{/* Canvas 动态脑波线示意 */}
-							<svg width="100%" height="80" style={{ overflow: "visible" }}>
+							<svg width="100%" height="60" style={{ overflow: "visible" }}>
 								<path
-									d="M0 40 C 50 10, 100 70, 150 30 C 200 10, 250 80, 300 40 C 350 20, 400 70, 450 40 L 500 40"
+									d="M0 30 C 50 10, 100 50, 150 20 C 200 10, 250 60, 300 30 C 350 15, 400 50, 450 30 L 500 30"
 									fill="none"
 									stroke="url(#neonGradient)"
 									strokeWidth="3"
@@ -79,6 +79,28 @@ export default function LandingPage() {
 								</defs>
 							</svg>
 						</div>
+
+						{/* Before & After Demo */}
+						<div style={styles.demoContainer}>
+							<div style={styles.demoBox}>
+								<div style={styles.demoHeader}>🎤 YOUR VOICE (MESSY & DUMPED)</div>
+								<div style={styles.demoTextRaw}>
+									"So, uh, we need to like... design a new logo by Friday... and oh, don't forget to email Sarah about the pricing update."
+								</div>
+							</div>
+							<div style={styles.demoArrow}>⬇️</div>
+							<div style={styles.demoBoxActive}>
+								<div style={styles.demoHeaderActive}>⚡ AUTO-STRUCTURED (NOTION SYNCED)</div>
+								<div style={styles.demoTextStructured}>
+									<strong>Action Items:</strong>
+									<ul style={{ margin: "5px 0 0 15px", padding: 0, fontSize: "0.8rem", color: "#A7F3D0" }}>
+										<li>🎯 Design a new logo (Deadline: Friday)</li>
+										<li>✉️ Email Sarah re: pricing update</li>
+									</ul>
+								</div>
+							</div>
+						</div>
+
 						<div style={styles.previewButtons}>
 							<div style={styles.previewBtn}>🎤 Click to Dump</div>
 							<div style={styles.previewBtnActive}>⚡ 1-Click Sync Notion</div>
@@ -93,16 +115,16 @@ export default function LandingPage() {
 				<div style={styles.featureGrid}>
 					<div style={styles.featureCard}>
 						<div style={styles.featureIcon}>🎤</div>
-						<h3 style={styles.featureTitle}>Zero-Barrier Voice Output</h3>
+						<h3 style={styles.featureTitle}>Zero-Barrier Voice Capture</h3>
 						<p style={styles.featureDesc}>
-							Skip blank-page procrastination. Open the mic, talk naturally with stutters. AI filters useless repeating words and constructs clarity.
+							Skip blank-page procrastination. Open the mic, talk naturally with stutters. AI auto-removes filler words ("ums", "likes") and instantly structures your stream of consciousness.
 						</p>
 					</div>
 					<div style={styles.featureCard}>
 						<div style={styles.featureIcon}>✍️</div>
-						<h3 style={styles.featureTitle}>Personal Tone Cloning</h3>
+						<h3 style={styles.featureTitle}>Keeps Your Voice (Tone Cloning)</h3>
 						<p style={styles.featureDesc}>
-							AI analyzes your written samples to capture your vocabulary. The output reads exactly like it was hand-written by you—just much tidier.
+							AI learns how you speak and write, so the structured output still sounds like you—just clearer.
 						</p>
 					</div>
 					<div style={styles.featureCard}>
@@ -184,7 +206,7 @@ export default function LandingPage() {
 					<div style={styles.priceCard}>
 						<h3 style={styles.pricePlanTitle}>Lifetime Vault</h3>
 						<div style={styles.priceValue}>$59.99</div>
-						<p style={styles.priceTerm}>One-time purchase</p>
+						<p style={styles.priceTerm}>Pay once, own forever</p>
 						<ul style={styles.priceFeatures}>
 							<li>♾️ All Premium Mind Privileges Forever</li>
 							<li>📦 Lifetime Updates & No Subscriptions</li>
@@ -417,6 +439,55 @@ const styles = {
 		textAlign: "center" as const,
 		fontSize: "0.75rem",
 		fontWeight: "bold",
+	},
+	demoContainer: {
+		display: "flex",
+		flexDirection: "column" as const,
+		gap: "0.8rem",
+		margin: "1rem 0 1.5rem 0",
+	},
+	demoBox: {
+		background: "rgba(255, 255, 255, 0.02)",
+		border: "1px solid rgba(255, 255, 255, 0.05)",
+		borderRadius: "8px",
+		padding: "0.8rem",
+	},
+	demoHeader: {
+		fontSize: "0.7rem",
+		color: "rgba(255, 255, 255, 0.4)",
+		fontWeight: "bold",
+		marginBottom: "0.4rem",
+		letterSpacing: "0.5px",
+	},
+	demoTextRaw: {
+		fontSize: "0.8rem",
+		color: "rgba(255, 255, 255, 0.7)",
+		lineHeight: "1.4",
+		fontStyle: "italic",
+	},
+	demoArrow: {
+		textAlign: "center" as const,
+		color: "#8B5CF6",
+		fontSize: "1rem",
+		margin: "-0.2rem 0",
+	},
+	demoBoxActive: {
+		background: "rgba(16, 185, 129, 0.03)",
+		border: "1px solid rgba(16, 185, 129, 0.2)",
+		borderRadius: "8px",
+		padding: "0.8rem",
+	},
+	demoHeaderActive: {
+		fontSize: "0.7rem",
+		color: "#10B981",
+		fontWeight: "bold",
+		marginBottom: "0.4rem",
+		letterSpacing: "0.5px",
+	},
+	demoTextStructured: {
+		fontSize: "0.8rem",
+		color: "#E0E7FF",
+		lineHeight: "1.4",
 	},
 	features: {
 		padding: "6rem 2rem",
