@@ -70,45 +70,7 @@ class BinauralPlayer {
     _ application: UIApplication,
     didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?
   ) -> Bool {
-    let result = super.application(application, didFinishLaunchingWithOptions: launchOptions)
-    
-    guard let controller = window?.rootViewController as? FlutterViewController else {
-      return result
-    }
-    let syncChannel = FlutterMethodChannel(name: "com.brainvent.app/device_sync",
-                                              binaryMessenger: controller.binaryMessenger)
-    
-    syncChannel.setMethodCallHandler({
-      [weak self] (call: FlutterMethodCall, result: @escaping FlutterResult) -> Void in
-      guard let self = self else { return }
-      if call.method == "syncReminders" {
-        guard let args = call.arguments as? [String: Any],
-              let items = args["items"] as? [String] else {
-          result(FlutterError(code: "INVALID_ARGS", message: "Missing items arguments", details: nil))
-          return
-        }
-        self.syncRemindersToiOS(items: items, result: result)
-      } else if call.method == "getLaunchUrl" {
-        result(self.launchUrl)
-        self.launchUrl = nil
-      } else if call.method == "toggleFocusSound" {
-        guard let args = call.arguments as? [String: Any],
-              let play = args["play"] as? Bool else {
-          result(FlutterError(code: "INVALID_ARGS", message: "Missing play argument", details: nil))
-          return
-        }
-        if play {
-          self.focusPlayer.start()
-        } else {
-          self.focusPlayer.stop()
-        }
-        result(nil)
-      } else {
-        result(FlutterMethodNotImplemented)
-      }
-    })
-
-    return result
+    return super.application(application, didFinishLaunchingWithOptions: launchOptions)
   }
 
   override func application(
@@ -172,5 +134,38 @@ class BinauralPlayer {
 
   func didInitializeImplicitFlutterEngine(_ engineBridge: FlutterImplicitEngineBridge) {
     GeneratedPluginRegistrant.register(with: engineBridge.pluginRegistry)
+    
+    let syncChannel = FlutterMethodChannel(name: "com.brainvent.app/device_sync",
+                                              binaryMessenger: engineBridge.applicationRegistrar.messenger())
+    
+    syncChannel.setMethodCallHandler({
+      [weak self] (call: FlutterMethodCall, result: @escaping FlutterResult) -> Void in
+      guard let self = self else { return }
+      if call.method == "syncReminders" {
+        guard let args = call.arguments as? [String: Any],
+              let items = args["items"] as? [String] else {
+          result(FlutterError(code: "INVALID_ARGS", message: "Missing items arguments", details: nil))
+          return
+        }
+        self.syncRemindersToiOS(items: items, result: result)
+      } else if call.method == "getLaunchUrl" {
+        result(self.launchUrl)
+        self.launchUrl = nil
+      } else if call.method == "toggleFocusSound" {
+        guard let args = call.arguments as? [String: Any],
+              let play = args["play"] as? Bool else {
+          result(FlutterError(code: "INVALID_ARGS", message: "Missing play argument", details: nil))
+          return
+        }
+        if play {
+          self.focusPlayer.start()
+        } else {
+          self.focusPlayer.stop()
+        }
+        result(nil)
+      } else {
+        result(FlutterMethodNotImplemented)
+      }
+    })
   }
 }
