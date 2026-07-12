@@ -7,9 +7,8 @@ class ApiService {
   // Go 后端默认 API 地址
   // 在 iOS 模拟器或真实局域网联调下，可以使用 localhost/您的 Mac 局域网 IP
   // 如果是 Android 模拟器，Android 内部路由 localhost 对应 10.0.2.2 端口
-  static String baseUrl = kReleaseMode
-      ? 'https://dumpit-r0zv.onrender.com'
-      : (Platform.isAndroid ? 'http://10.0.2.2:8080' : 'http://localhost:8080');
+  // 默认使用部署在 Render 的后端地址，以便他人使用和本地直接联调
+  static String baseUrl = 'https://dumpit-r0zv.onrender.com';
 
   /// 更改全局后端地址以适应真机局域网联调
   static void setBaseUrl(String customIp) {
