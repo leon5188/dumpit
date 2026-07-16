@@ -12,8 +12,8 @@ class IapService {
   StreamSubscription<List<PurchaseDetails>>? _subscription;
   
   // 内购商品 ID (与 App Store Connect 配置的一致)
-  static const String premiumMonthlyId = 'dumpit_premium_monthly';
-  static const String premiumLifetimeId = 'dumpit_premium_lifetime';
+  static const String premiumMonthlyId = 'dumpit_premium_monthly_sub';
+  static const String premiumLifetimeId = 'dumpit_premium_lifetime_buy';
 
   // 购买成功的通知回调
   VoidCallback? onPurchaseSuccess;

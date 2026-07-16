@@ -108,7 +108,7 @@ func verifyReceiptWithApple(url string, receiptData string) (bool, int, error) {
 		// 校验是否包含了我们需要的黄金会员产品 ID
 		hasPremium := false
 		for _, item := range appleResp.Receipt.InApp {
-			if item.ProductID == "dumpit_premium_monthly" || item.ProductID == "dumpit_premium_lifetime" {
+			if item.ProductID == "dumpit_premium_monthly_sub" || item.ProductID == "dumpit_premium_lifetime_buy" {
 				hasPremium = true
 				break
 			}
