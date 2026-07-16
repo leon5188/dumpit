@@ -151,7 +151,7 @@ class ConfigDialogs {
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                   ),
                   child: Text(
-                    isZh ? '订阅 Premium (￥18.00/月)' : 'Subscribe Premium ($2.49/mo)',
+                    isZh ? '订阅 Premium (￥18.00/月)' : 'Subscribe Premium (\$2.49/mo)',
                     style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
                   ),
                 ),
