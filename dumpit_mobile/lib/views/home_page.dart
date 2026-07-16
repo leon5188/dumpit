@@ -8,6 +8,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../models/history_record.dart';
 import '../../services/api_service.dart';
 import '../../services/device_sync_service.dart';
+import '../../services/iap_service.dart';
 import '../translations.dart';
 import 'widgets/restructured_details_sheet.dart';
 import 'widgets/config_dialogs.dart';
@@ -115,6 +116,22 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
   void initState() {
     super.initState();
     _loadLocalSettings();
+    
+    // 初始化应用内购买服务，监听交易更新事件
+    IapService.instance.initialize(
+      onSuccess: () {
+        setState(() {
+          _isPremium = true;
+        });
+      },
+      onError: (err) {
+        _showSnackBar(err);
+      },
+      onStatus: (status) {
+        _showSnackBar(status);
+      },
+    );
+
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       final url = await DeviceSyncService.getLaunchUrl();
       if (url != null) {
@@ -139,6 +156,7 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
 
   @override
   void dispose() {
+    IapService.instance.dispose();
     _audioRecorder.dispose();
     _amplitudeSubscription?.cancel();
     _timer?.cancel();
@@ -813,11 +831,10 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
                 child: GestureDetector(
                   onTap: () {
                     Navigator.of(context).pop(); // 先关闭侧边栏
-                    ConfigDialogs.showLicenseDialog(
+                    ConfigDialogs.showIapPaywall(
                       context: context,
                       isZh: _isZh,
-                      licenseKeyController: _licenseKeyController,
-                      onActivated: (key) {
+                      onActivated: () {
                         setState(() {
                           _isPremium = true;
                         });

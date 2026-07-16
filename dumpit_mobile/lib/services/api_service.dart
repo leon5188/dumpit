@@ -114,12 +114,11 @@ class ApiService {
     }
   }
 
-  /// 🔒 向 Go 后端发起 Lemon Squeezy 激活码校验
-  static Future<bool> verifyLicense(String licenseKey) async {
-    final uri = Uri.parse('$baseUrl/api/license/verify');
+  /// 🔒 向 Go 后端发起 Apple IAP 支付票据（收据）校验
+  static Future<bool> verifyReceipt(String receiptData) async {
+    final uri = Uri.parse('$baseUrl/api/iap/verify');
     final body = json.encode({
-      'license_key': licenseKey,
-      'instance_name': 'DumpIt Mobile App Client',
+      'receipt_data': receiptData,
     });
 
     try {
@@ -138,7 +137,7 @@ class ApiService {
         }
         return false;
       } else {
-        String errorMsg = '激活码校验失败';
+        String errorMsg = '购买凭证校验失败';
         try {
           final errBody = json.decode(utf8.decode(response.bodyBytes));
           if (errBody['error'] != null) {

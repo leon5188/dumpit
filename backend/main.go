@@ -58,6 +58,7 @@ func main() {
 	e.POST("/api/process-audio", audioHandler.UploadAndProcessAudio)
 	e.POST("/api/notion/sync", notionHandler.Sync)
 	e.POST("/api/license/verify", handlers.VerifyLicenseHandler)
+	e.POST("/api/iap/verify", handlers.VerifyIAPHandler)
 
 	// 获取端口配置，默认使用 8080
 	port := os.Getenv("PORT")

@@ -1,0 +1,2 @@
+NSMicrophoneUsageDescription = "BrainVent needs to access your microphone to record your voice ideas. Audio will be transcribed and structured using AI to create your tasks and mind maps.";
+NSRemindersUsageDescription = "BrainVent needs to access your Reminders to allow syncing AI-structured tasks directly to iOS Reminders.";
