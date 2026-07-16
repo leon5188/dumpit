@@ -12,7 +12,8 @@ class IapService {
   StreamSubscription<List<PurchaseDetails>>? _subscription;
   
   // 内购商品 ID (与 App Store Connect 配置的一致)
-  static const String premiumProductId = 'dumpit_premium_monthly';
+  static const String premiumMonthlyId = 'dumpit_premium_monthly';
+  static const String premiumLifetimeId = 'dumpit_premium_lifetime';
 
   // 购买成功的通知回调
   VoidCallback? onPurchaseSuccess;
@@ -68,7 +69,7 @@ class IapService {
         return;
       }
 
-      const Set<String> ids = {premiumProductId};
+      const Set<String> ids = {premiumMonthlyId, premiumLifetimeId};
       final ProductDetailsResponse response = await _inAppPurchase.queryProductDetails(ids);
       
       if (response.notFoundIDs.isNotEmpty) {
@@ -82,8 +83,8 @@ class IapService {
     }
   }
 
-  /// 发起购买黄金会员
-  Future<void> buyPremium() async {
+  /// 发起购买内购商品
+  Future<void> buyProduct(String productId) async {
     if (!_isAvailable) {
       onPurchaseError?.call('内购服务暂不可用，请稍后再试');
       return;
@@ -99,10 +100,15 @@ class IapService {
       return;
     }
 
-    final productDetails = _products.firstWhere(
-      (p) => p.id == premiumProductId,
-      orElse: () => _products.first,
-    );
+    ProductDetails productDetails;
+    try {
+      productDetails = _products.firstWhere(
+        (p) => p.id == productId,
+      );
+    } catch (_) {
+      onPurchaseError?.call('未在 App Store 列表里找到对应商品: $productId');
+      return;
+    }
 
     final purchaseParam = PurchaseParam(productDetails: productDetails);
     try {

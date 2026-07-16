@@ -142,7 +142,7 @@ class ConfigDialogs {
               children: [
                 ElevatedButton(
                   onPressed: () {
-                    IapService.instance.buyPremium();
+                    IapService.instance.buyProduct(IapService.premiumMonthlyId);
                   },
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.amber,
@@ -151,8 +151,25 @@ class ConfigDialogs {
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                   ),
                   child: Text(
-                    isZh ? '订阅 Premium (￥18.00/月)' : 'Subscribe Premium (\$2.49/mo)',
-                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                    isZh ? '订阅 Premium 月会员 (￥30.00/月)' : 'Subscribe Premium (\$4.99/mo)',
+                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                ElevatedButton(
+                  onPressed: () {
+                    IapService.instance.buyProduct(IapService.premiumLifetimeId);
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF2E2E3F),
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    side: const BorderSide(color: Colors.amber, width: 1),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  ),
+                  child: Text(
+                    isZh ? '终身买断 Lifetime Vault (￥398.00)' : 'Lifetime Vault (\$59.99)',
+                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
                   ),
                 ),
                 const SizedBox(height: 8),
