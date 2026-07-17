@@ -194,6 +194,35 @@ class ConfigDialogs {
                     ),
                   ],
                 ),
+                const Divider(color: Colors.white24, height: 16),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    GestureDetector(
+                      onTap: () => _showTermsDialog(context, isZh),
+                      child: Text(
+                        isZh ? '使用条款 (EULA)' : 'Terms of Use (EULA)',
+                        style: const TextStyle(
+                          color: Colors.white54,
+                          fontSize: 10,
+                          decoration: TextDecoration.underline,
+                        ),
+                      ),
+                    ),
+                    const Text('  |  ', style: TextStyle(color: Colors.white24, fontSize: 10)),
+                    GestureDetector(
+                      onTap: () => _showPrivacyDialog(context, isZh),
+                      child: Text(
+                        isZh ? '隐私政策' : 'Privacy Policy',
+                        style: const TextStyle(
+                          color: Colors.white54,
+                          fontSize: 10,
+                          decoration: TextDecoration.underline,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
               ],
             ),
           ],
@@ -229,6 +258,90 @@ class ConfigDialogs {
           ),
         ),
       ],
+    );
+  }
+
+  static void _showTermsDialog(BuildContext context, bool isZh) {
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          backgroundColor: const Color(0xFF1E1E2F),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          title: Text(
+            isZh ? '使用条款 (EULA)' : 'Terms of Use (EULA)',
+            style: const TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.bold),
+          ),
+          content: SizedBox(
+            width: double.maxFinite,
+            child: SingleChildScrollView(
+              child: Text(
+                isZh
+                    ? '欢迎使用 Dumpit！\n\n'
+                        '1. 协议接受\n使用本软件即表示您同意本使用条款。若您不同意，请勿使用。\n\n'
+                        '2. 许可范围\nDumpit 授予您一项个人、非独占、不可转让、有限的许可，允许您在 Apple 智能设备上运行本软件。\n\n'
+                        '3. 订阅与付费\n本软件提供自动续订订阅服务。所有费用将通过您的 Apple ID 账户进行扣除。订阅会自动续订，除非您在当前订阅期结束前至少 24 小时关闭自动续订。\n\n'
+                        '4. 适用标准 EULA\n除本协议另有规定外，本软件同时适用 Apple 的标准应用许可协议 (Standard EULA)。您可以通过以下链接查阅完整内容：https://www.apple.com/legal/internet-services/itunes/dev/stdeula/\n\n'
+                        '5. 免责声明\n本软件“按原样”提供，不提供任何明示或暗示的保证。对于因使用本软件而导致的任何数据丢失或间接损失，我们不承担任何责任。'
+                    : 'Welcome to Dumpit!\n\n'
+                        '1. Acceptance of Terms\nBy using this software, you agree to these Terms of Use. If you do not agree, please do not use it.\n\n'
+                        '2. Scope of License\nDumpit grants you a personal, non-exclusive, non-transferable, limited license to run this software on Apple devices.\n\n'
+                        '3. Subscriptions & Billing\nThis software offers auto-renewable subscriptions. Payment will be charged to your Apple ID account. Subscriptions automatically renew unless auto-renew is turned off at least 24 hours before the end of the current period.\n\n'
+                        '4. Standard EULA Applies\nUnless otherwise specified, this application is governed by Apple\'s Standard Licensed Application End User License Agreement (EULA). You can review the details at: https://www.apple.com/legal/internet-services/itunes/dev/stdeula/\n\n'
+                        '5. Disclaimer of Warranties\nThis software is provided "as is" without warranties of any kind. We are not liable for any data loss or indirect damages arising from using this software.',
+                style: const TextStyle(color: Colors.white70, fontSize: 12, height: 1.4),
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: Text(isZh ? '确认' : 'Close', style: const TextStyle(color: Colors.amber)),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  static void _showPrivacyDialog(BuildContext context, bool isZh) {
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          backgroundColor: const Color(0xFF1E1E2F),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          title: Text(
+            isZh ? '隐私政策' : 'Privacy Policy',
+            style: const TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.bold),
+          ),
+          content: SizedBox(
+            width: double.maxFinite,
+            child: SingleChildScrollView(
+              child: Text(
+                isZh
+                    ? '我们非常重视您的隐私：\n\n'
+                        '1. 数据收集与处理\nDumpit 主要在本地保存和整理您的脑暴记录与录音。除非您主动开启云同步服务（如 Notion 同步），否则您的数据不会被传输到外部服务器。我们不会将您的个人隐私数据出售或共享给任何第三方。\n\n'
+                        '2. 云同步与 API\n当您配置并开启 Notion 或其它云同步时，本 App 会调用相应平台的安全 API 传输选定的笔记。相关访问令牌（Token）将加密存储在您的设备本地。\n\n'
+                        '3. 权限说明\n我们可能需要麦克风权限以支持语音录音功能。我们不会在未获得您允许的情况下访问您的麦克风或后台进行录音。\n\n'
+                        '4. 政策变更\n隐私政策如有更新，我们会在应用内发布通知。'
+                    : 'We value your privacy:\n\n'
+                        '1. Data Collection & Processing\nDumpit primarily saves and restructures your brain dumps and voice recordings locally on your device. Unless you manually enable cloud synchronization services (such as Notion sync), your data will not be transmitted to external servers. We do not sell or share your personal data with third parties.\n\n'
+                        '2. Cloud Sync & APIs\nWhen you configure and enable Notion or other cloud integrations, the App calls the respective platform APIs to transfer selected notes securely. Access tokens are encrypted and stored locally on your device.\n\n'
+                        '3. Permissions\nWe require microphone access to support voice recording. We will never access your microphone or record in the background without your explicit permission.\n\n'
+                        '4. Changes to Policy\nAny updates to our Privacy Policy will be notified within the App.',
+                style: const TextStyle(color: Colors.white70, fontSize: 12, height: 1.4),
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: Text(isZh ? '确认' : 'Close', style: const TextStyle(color: Colors.amber)),
+            ),
+          ],
+        );
+      },
     );
   }
 }
