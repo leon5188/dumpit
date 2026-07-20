@@ -321,15 +321,17 @@ class ConfigDialogs {
               child: Text(
                 isZh
                     ? '我们非常重视您的隐私：\n\n'
-                        '1. 数据收集与处理\nDumpit 主要在本地保存和整理您的脑暴记录与录音。除非您主动开启云同步服务（如 Notion 同步），否则您的数据不会被传输到外部服务器。我们不会将您的个人隐私数据出售或共享给任何第三方。\n\n'
-                        '2. 云同步与 API\n当您配置并开启 Notion 或其它云同步时，本 App 会调用相应平台的安全 API 传输选定的笔记。相关访问令牌（Token）将加密存储在您的设备本地。\n\n'
-                        '3. 权限说明\n我们可能需要麦克风权限以支持语音录音功能。我们不会在未获得您允许的情况下访问您的麦克风或后台进行录音。\n\n'
-                        '4. 政策变更\n隐私政策如有更新，我们会在应用内发布通知。'
+                        '1. 数据收集与本地存储\nDumpit 主要在您的设备本地保存您的脑暴记录与录音。在未获得您的许可前，我们不会向外部传输您的任何数据。\n\n'
+                        '2. 第三方 AI 服务共享 (OpenAI)\n为了实现核心的 AI 语气克隆、脑力重构、待办及日程提取服务，在您明确授权同意后，本 App 会将您的语音录音、文风样例和处理指令安全加密传输至第三方 AI 服务商 OpenAI（使用其 Whisper 语音识别及 GPT 系列模型）。数据仅用于本次内容重构处理。根据我们与 OpenAI 接口的数据保护条款，您的所有上传数据均不会被用于 OpenAI 模型的训练，且 OpenAI 承诺提供同等水准的隐私保护。\n\n'
+                        '3. 云同步与安全\n当您配置并开启 Notion 同步时，本 App 会调用相应平台的安全 API 传输选定的笔记。您的 Notion Token 将被加密存储在本地设备中。\n\n'
+                        '4. 权限使用说明\n我们仅在支持语音输入时请求麦克风权限，绝对不会在未授权或后台状态下进行录音。\n\n'
+                        '5. 政策变更与撤销\n您可以随时在应用偏好设置中撤销对第三方 AI 服务的共享授权。隐私政策如有更新，我们将在应用内通知您。'
                     : 'We value your privacy:\n\n'
-                        '1. Data Collection & Processing\nDumpit primarily saves and restructures your brain dumps and voice recordings locally on your device. Unless you manually enable cloud synchronization services (such as Notion sync), your data will not be transmitted to external servers. We do not sell or share your personal data with third parties.\n\n'
-                        '2. Cloud Sync & APIs\nWhen you configure and enable Notion or other cloud integrations, the App calls the respective platform APIs to transfer selected notes securely. Access tokens are encrypted and stored locally on your device.\n\n'
-                        '3. Permissions\nWe require microphone access to support voice recording. We will never access your microphone or record in the background without your explicit permission.\n\n'
-                        '4. Changes to Policy\nAny updates to our Privacy Policy will be notified within the App.',
+                        '1. Data Collection & Local Storage\nDumpit primarily saves and restructures your brain dumps and voice recordings locally on your device. We will not transmit your data unless you explicitly permit it.\n\n'
+                        '2. Third-Party AI Data Sharing (OpenAI)\nTo provide AI-powered tone cloning, restructuring, and event extraction, this app transmits your voice recordings, tone samples, and instructions securely to third-party AI provider OpenAI (using Whisper and GPT models) after obtaining your explicit consent. Your data is used solely for the active session. Under our agreement with OpenAI, your data will not be used for model training, and OpenAI provides equivalent privacy safeguards.\n\n'
+                        '3. Cloud Sync & Security\nWhen configuring Notion sync, the app calls the platform API to transfer selected notes securely. Access tokens are encrypted and stored locally on your device.\n\n'
+                        '4. Permissions\nWe require microphone access to support voice recording. We will never access your microphone or record in the background without explicit permission.\n\n'
+                        '5. Revocation & Changes\nYou can revoke AI data sharing authorization at any time in the app preferences. Any updates to our policy will be notified within the App.',
                 style: const TextStyle(color: Colors.white70, fontSize: 12, height: 1.4),
               ),
             ),
@@ -344,4 +346,129 @@ class ConfigDialogs {
       },
     );
   }
+
+  /// 🤖 弹出 AI 隐私与数据共享授权对话框
+  static Future<bool?> showAiPrivacyDialog({
+    required BuildContext context,
+    required bool isZh,
+  }) {
+    return showDialog<bool>(
+      context: context,
+      barrierDismissible: false, // 强制用户做出选择
+      builder: (context) {
+        return AlertDialog(
+          backgroundColor: const Color(0xFF1E1E2F),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: Row(
+            children: [
+              const Text(
+                '🤖 ',
+                style: TextStyle(fontSize: 20),
+              ),
+              Expanded(
+                child: Text(
+                  isZh ? 'AI 脑力整理授权声明' : 'AI Restructuring Consent',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          content: SizedBox(
+            width: double.maxFinite,
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    isZh
+                        ? '为了向您提供 ADHD 友好的脑力倾倒、语气克隆与任务重构服务，本应用需要将数据发送给第三方 AI 进行处理。请在开始前仔细阅读以下共享声明：'
+                        : 'To provide ADHD-friendly brain dumping, tone cloning, and restructuring features, this app needs to share data with a third-party AI service. Please read the following consent form carefully:',
+                    style: const TextStyle(color: Colors.white70, fontSize: 12, height: 1.4),
+                  ),
+                  const SizedBox(height: 12),
+                  _buildAiPrivacyBullet(
+                    icon: '📤',
+                    title: isZh ? '共享的数据' : 'Data to be sent',
+                    desc: isZh 
+                        ? '您录制的语音音频数据、您输入的文风参考样例、以及额外的整理要求指令。' 
+                        : 'Your recorded voice audio, tone samples, and custom restructuring instructions.',
+                  ),
+                  const SizedBox(height: 10),
+                  _buildAiPrivacyBullet(
+                    icon: '🏢',
+                    title: isZh ? '数据接收方' : 'Data recipient',
+                    desc: isZh 
+                        ? '第三方 AI 服务商 OpenAI（使用 Whisper 语音识别与 GPT-4o-mini 重构模型）。' 
+                        : 'Third-party AI provider OpenAI (using Whisper for transcription and GPT-4o-mini for restructuring).',
+                  ),
+                  const SizedBox(height: 10),
+                  _buildAiPrivacyBullet(
+                    icon: '🔒',
+                    title: isZh ? '数据用途与保护' : 'Use and protection',
+                    desc: isZh 
+                        ? '数据仅用于本次脑力整理。OpenAI 承诺提供同等的隐私安全保护，且您的数据不会被用于其 AI 模型的训练。' 
+                        : 'Data is processed solely for restructuring. OpenAI provides equivalent privacy protection and does not use API data to train its models.',
+                  ),
+                ],
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: Text(
+                isZh ? '不同意' : 'Disagree',
+                style: const TextStyle(color: Colors.grey),
+              ),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.pop(context, true),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.purpleAccent,
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              ),
+              child: Text(isZh ? '同意并开始使用' : 'Agree & Continue'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  static Widget _buildAiPrivacyBullet({
+    required String icon,
+    required String title,
+    required String desc,
+  }) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(icon, style: const TextStyle(fontSize: 14)),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                title,
+                style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                desc,
+                style: const TextStyle(color: Colors.grey, fontSize: 11, height: 1.3),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
 }
+

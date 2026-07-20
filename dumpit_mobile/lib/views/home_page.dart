@@ -58,6 +58,7 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
   bool _showConfig = false;
   bool _showGuide = true;
   bool _isPremium = false;
+  bool _aiPrivacyAgreed = false;
 
   // 核心提取结果 (用于当前活跃查看)
   String _summary = '';
@@ -180,6 +181,7 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
       _notionPageController.text = prefs.getString('dumpit_notion_page_id') ?? '';
       _isPremium = prefs.getBool('dumpit_is_premium') ?? false;
       _licenseKeyController.text = prefs.getString('dumpit_license_key') ?? '';
+      _aiPrivacyAgreed = prefs.getBool('dumpit_ai_privacy_agreed') ?? false;
       
       final historyRaw = prefs.getString('dumpit_history_list');
       if (historyRaw != null) {
@@ -605,8 +607,21 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
                           await _stopRecording();
                           Navigator.pop(context); // 录音完成关闭
                         } else {
-                          await _startRecording();
-                          setSheetState(() {});
+                          if (!_aiPrivacyAgreed) {
+                            final agreed = await ConfigDialogs.showAiPrivacyDialog(context: context, isZh: _isZh);
+                            if (agreed == true) {
+                              setState(() {
+                                _aiPrivacyAgreed = true;
+                              });
+                              final prefs = await SharedPreferences.getInstance();
+                              await prefs.setBool('dumpit_ai_privacy_agreed', true);
+                              setSheetState(() {});
+                              await _startRecording();
+                            }
+                          } else {
+                            await _startRecording();
+                            setSheetState(() {});
+                          }
                         }
                       },
                     ),
@@ -1100,7 +1115,19 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
               if (_isRecording) {
                 await _stopRecording();
               } else {
-                await _startRecording();
+                if (!_aiPrivacyAgreed) {
+                  final agreed = await ConfigDialogs.showAiPrivacyDialog(context: context, isZh: _isZh);
+                  if (agreed == true) {
+                    setState(() {
+                      _aiPrivacyAgreed = true;
+                    });
+                    final prefs = await SharedPreferences.getInstance();
+                    await prefs.setBool('dumpit_ai_privacy_agreed', true);
+                    await _startRecording();
+                  }
+                } else {
+                  await _startRecording();
+                }
               }
             },
             child: AnimatedContainer(
@@ -1234,6 +1261,54 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
               border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
             ),
             onChanged: _saveNotionPageId,
+          ),
+          const SizedBox(height: 12),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      _isZh ? '授权第三方 AI 数据处理 (OpenAI)' : 'Authorize Third-Party AI (OpenAI)',
+                      style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      _isZh 
+                          ? '开启后，录音和文风样例将被发送至 OpenAI 进行重构。' 
+                          : 'Send voice and tone data to OpenAI for processing.',
+                      style: const TextStyle(color: Colors.grey, fontSize: 10),
+                    ),
+                  ],
+                ),
+              ),
+              Switch(
+                value: _aiPrivacyAgreed,
+                activeColor: Colors.purpleAccent,
+                inactiveTrackColor: Colors.white12,
+                onChanged: (val) async {
+                  if (val) {
+                    final agreed = await ConfigDialogs.showAiPrivacyDialog(context: context, isZh: _isZh);
+                    if (agreed == true) {
+                      setState(() {
+                        _aiPrivacyAgreed = true;
+                      });
+                      final prefs = await SharedPreferences.getInstance();
+                      await prefs.setBool('dumpit_ai_privacy_agreed', true);
+                    }
+                  } else {
+                    setState(() {
+                      _aiPrivacyAgreed = false;
+                    });
+                    final prefs = await SharedPreferences.getInstance();
+                    await prefs.setBool('dumpit_ai_privacy_agreed', false);
+                    _showSnackBar(_isZh ? '已撤销 AI 数据共享授权' : 'AI authorization revoked');
+                  }
+                },
+              ),
+            ],
           ),
         ]
       ],
