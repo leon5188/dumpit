@@ -19,6 +19,10 @@
 	<string>BrainVent needs to access your Reminders to allow syncing AI-structured tasks directly to iOS Reminders.</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>BrainVent needs to access your microphone to record your voice ideas. Audio will be transcribed and structured using AI to create your tasks and mind maps.</string>
+	<key>NSCameraUsageDescription</key>
+	<string>BrainVent requires camera access to allow scanning paper document notes and contract agreements for AI analysis.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>BrainVent requires photo library access to allow selecting contract images and document files for AI analysis.</string>
 	<key>CFBundleLocalizations</key>
 	<array>
 		<string>en</string>
