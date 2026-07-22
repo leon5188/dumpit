@@ -1,0 +1,2 @@
+NSMicrophoneUsageDescription = "BrainVent需要使用您的麦克风来录制您的语音想法。录音将通过AI技术转录并整理为您专属的待办事项和思维导图。";
+NSRemindersUsageDescription = "BrainVent需要访问您的系统提醒事项，以便您可以将AI整理出来的待办清单同步到系统的‘提醒事项’中进行管理。";
