@@ -72,13 +72,20 @@ class _RestructuredDetailsSheetState extends State<RestructuredDetailsSheet> wit
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(
-                widget.isZh ? '🧠 BrainVent. 整理结果' : '🧠 BrainVent Result',
-                style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
+              Expanded(
+                child: Text(
+                  widget.isZh ? '🧠 BrainVent. 整理结果' : '🧠 BrainVent Result',
+                  style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
+                  overflow: TextOverflow.ellipsis,
+                  maxLines: 1,
+                ),
               ),
               Row(
+                mainAxisSize: MainAxisSize.min,
                 children: [
                   IconButton(
+                    padding: const EdgeInsets.all(6),
+                    constraints: const BoxConstraints(),
                     icon: Icon(
                       _isFocusPlaying ? Icons.psychology : Icons.psychology_outlined,
                       color: _isFocusPlaying ? Colors.purpleAccent : Colors.grey,
@@ -110,6 +117,8 @@ class _RestructuredDetailsSheetState extends State<RestructuredDetailsSheet> wit
                     },
                   ),
                   IconButton(
+                    padding: const EdgeInsets.all(6),
+                    constraints: const BoxConstraints(),
                     icon: const Icon(Icons.notifications_active_outlined, color: Colors.lightBlueAccent, size: 20),
                     tooltip: widget.isZh ? '同步至系统提醒' : 'Sync to Reminders',
                     onPressed: () async {
@@ -159,14 +168,20 @@ class _RestructuredDetailsSheetState extends State<RestructuredDetailsSheet> wit
                     },
                   ),
                   IconButton(
+                    padding: const EdgeInsets.all(6),
+                    constraints: const BoxConstraints(),
                     icon: const Icon(Icons.bolt, color: Colors.amberAccent, size: 20),
                     onPressed: widget.onSyncNotion,
                   ),
                   IconButton(
+                    padding: const EdgeInsets.all(6),
+                    constraints: const BoxConstraints(),
                     icon: const Icon(Icons.archive_outlined, color: Colors.grey, size: 20),
                     onPressed: widget.onArchive,
                   ),
                   IconButton(
+                    padding: const EdgeInsets.all(6),
+                    constraints: const BoxConstraints(),
                     icon: const Icon(Icons.delete_outline, color: Colors.redAccent, size: 20),
                     onPressed: widget.onDestroy,
                   ),

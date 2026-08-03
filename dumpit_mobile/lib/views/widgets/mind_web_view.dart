@@ -172,8 +172,15 @@ class _MindWebViewState extends State<MindWebView> {
               return Container(
                 width: width,
                 height: 280,
+                clipBehavior: Clip.antiAlias,
                 decoration: BoxDecoration(
-                  color: Colors.black.withOpacity(0.25),
+                  gradient: LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: isDark
+                        ? [const Color(0xFF15111F), const Color(0xFF0B0A12)]
+                        : [Colors.black.withOpacity(0.03), Colors.black.withOpacity(0.06)],
+                  ),
                   borderRadius: BorderRadius.circular(12),
                   border: Border.all(
                     color: isDark ? Colors.white.withOpacity(0.05) : Colors.black.withOpacity(0.03),
@@ -186,23 +193,67 @@ class _MindWebViewState extends State<MindWebView> {
                           style: TextStyle(color: Colors.grey, fontSize: 13),
                         ),
                       )
-                    : GestureDetector(
-                        onPanStart: _handlePanStart,
-                        onPanUpdate: _handlePanUpdate,
-                        onPanEnd: _handlePanEnd,
-                        child: CustomPaint(
-                          size: _canvasSize,
-                          painter: _MindWebPainter(
-                            nodes: _nodes,
-                            isDarkMode: isDark,
+                    : Stack(
+                        children: [
+                          GestureDetector(
+                            onPanStart: _handlePanStart,
+                            onPanUpdate: _handlePanUpdate,
+                            onPanEnd: _handlePanEnd,
+                            child: CustomPaint(
+                              size: _canvasSize,
+                              painter: _MindWebPainter(
+                                nodes: _nodes,
+                                isDarkMode: isDark,
+                              ),
+                            ),
                           ),
-                        ),
+                          Positioned(
+                            top: 8,
+                            right: 10,
+                            child: _buildLegend(),
+                          ),
+                        ],
                       ),
               );
             },
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildLegend() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+      decoration: BoxDecoration(
+        color: Colors.black.withOpacity(0.35),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: Colors.white.withOpacity(0.06)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _buildLegendDot(Colors.purpleAccent, '灵感洞察'),
+          const SizedBox(height: 3),
+          _buildLegendDot(Colors.greenAccent, '待办事项'),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildLegendDot(Color color, String label) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          width: 6,
+          height: 6,
+          decoration: BoxDecoration(shape: BoxShape.circle, color: color),
+        ),
+        const SizedBox(width: 5),
+        Text(label, style: const TextStyle(color: Colors.white60, fontSize: 9.5)),
+      ],
     );
   }
 }
@@ -215,67 +266,128 @@ class _MindWebPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    // 1. 绘制网状连线（虚线与发光效果）
-    final linePaint = Paint()
-      ..color = Colors.purpleAccent.withOpacity(0.25)
-      ..strokeWidth = 1.2
-      ..style = PaintingStyle.stroke;
+    final center = Offset(size.width / 2, size.height / 2);
 
-    for (int i = 0; i < nodes.length; i++) {
-      final start = nodes[i].offset;
-      final end = nodes[(i + 1) % nodes.length].offset;
-      
-      // 绘制相近节点连线
-      canvas.drawLine(start, end, linePaint);
-      
-      // 跨度连线，丰富网状结构
-      if (nodes[i].type == 'todo' && nodes.length > 2) {
-        canvas.drawLine(start, nodes[0].offset, linePaint);
-      }
-    }
-
-    // 2. 绘制节点与文字标签
-    final textPainter = TextPainter(
-      textDirection: TextDirection.ltr,
+    // 1. 中心枢纽发光核心（代表本次脑力倾倒本身）
+    canvas.drawCircle(
+      center,
+      36,
+      Paint()
+        ..shader = RadialGradient(
+          colors: [Colors.purpleAccent.withOpacity(0.3), Colors.purpleAccent.withOpacity(0.0)],
+        ).createShader(Rect.fromCircle(center: center, radius: 36)),
+    );
+    canvas.drawCircle(center, 11, Paint()..color = const Color(0xFF1E1E2F));
+    canvas.drawCircle(
+      center,
+      11,
+      Paint()
+        ..color = Colors.purpleAccent.withOpacity(0.8)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1.6,
     );
 
+    // 2. 每个节点向中心枢纽绘制柔和弧线（弯曲方向随节点位置变化，避免直线杂乱重叠）
     for (final node in nodes) {
       final isInsight = node.type == 'insight';
-      
-      // 节点阴影发光 Paint
-      final shadowPaint = Paint()
-        ..color = (isInsight ? Colors.deepPurpleAccent : Colors.greenAccent).withOpacity(0.4)
-        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 5);
-      
-      // 节点实体 Paint
-      final nodePaint = Paint()
-        ..color = isInsight ? Colors.purpleAccent : Colors.greenAccent
-        ..style = PaintingStyle.fill;
+      final lineColor = isInsight ? Colors.purpleAccent : Colors.greenAccent;
 
-      // 绘制发光阴影
-      canvas.drawCircle(node.offset, 9.0, shadowPaint);
-      // 绘制中心圆点
-      canvas.drawCircle(node.offset, 6.0, nodePaint);
+      final mid = Offset.lerp(center, node.offset, 0.5)!;
+      final normal = (node.offset - center);
+      final normalLen = normal.distance;
+      final bow = normalLen == 0
+          ? Offset.zero
+          : Offset(-normal.dy, normal.dx) / normalLen * 16;
+      final control = mid + bow;
 
-      // 绘制文字
+      final path = Path()
+        ..moveTo(center.dx, center.dy)
+        ..quadraticBezierTo(control.dx, control.dy, node.offset.dx, node.offset.dy);
+
+      canvas.drawPath(
+        path,
+        Paint()
+          ..color = lineColor.withOpacity(0.16)
+          ..strokeWidth = 3
+          ..style = PaintingStyle.stroke
+          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 3),
+      );
+      canvas.drawPath(
+        path,
+        Paint()
+          ..color = lineColor.withOpacity(0.45)
+          ..strokeWidth = 1.1
+          ..style = PaintingStyle.stroke,
+      );
+    }
+
+    // 3. 绘制节点（发光圆点 + 圆角文字胶囊）
+    final textPainter = TextPainter(textDirection: TextDirection.ltr);
+
+    for (int i = 0; i < nodes.length; i++) {
+      final node = nodes[i];
+      final isInsight = node.type == 'insight';
+      final color = isInsight ? Colors.purpleAccent : Colors.greenAccent;
+      // 相邻节点交替上/下偏移，减少标签在水平相近时相互重叠
+      final verticalOffset = i.isEven ? -6.0 : 14.0;
+
+      canvas.drawCircle(
+        node.offset,
+        9.0,
+        Paint()
+          ..color = color.withOpacity(0.35)
+          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 6),
+      );
+      canvas.drawCircle(node.offset, 5.0, Paint()..color = color);
+      canvas.drawCircle(
+        node.offset,
+        5.0,
+        Paint()
+          ..color = Colors.white.withOpacity(0.7)
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 1,
+      );
+
+      // 靠近画布右边缘时把标签翻到节点左侧，避免文字溢出边界
+      final labelOnLeft = node.offset.dx > size.width - 90;
+      final maxLabelWidth = (labelOnLeft ? node.offset.dx : size.width - node.offset.dx) - 22;
+
       textPainter.text = TextSpan(
         text: node.label,
         style: TextStyle(
           fontSize: 9.5,
-          color: isDarkMode ? Colors.white70 : Colors.black87,
-          fontWeight: FontWeight.w500,
-          background: Paint()
-            ..color = isDarkMode ? Colors.black.withOpacity(0.6) : Colors.white.withOpacity(0.8)
-            ..style = PaintingStyle.fill,
+          color: isDarkMode ? Colors.white : Colors.black87,
+          fontWeight: FontWeight.w600,
         ),
       );
-      
-      textPainter.layout();
-      // 偏移文字，避免挡住小圆圈
-      textPainter.paint(
-        canvas,
-        node.offset + const Offset(10, -5),
+      textPainter.ellipsis = '…';
+      textPainter.maxLines = 1;
+      textPainter.layout(maxWidth: maxLabelWidth.clamp(30.0, double.infinity));
+
+      final labelOffset = labelOnLeft
+          ? node.offset + Offset(-11 - textPainter.width, verticalOffset)
+          : node.offset + Offset(11, verticalOffset);
+      final bgRect = RRect.fromRectAndRadius(
+        Rect.fromLTWH(
+          labelOffset.dx - 4,
+          labelOffset.dy - 2,
+          textPainter.width + 8,
+          textPainter.height + 4,
+        ),
+        const Radius.circular(6),
       );
+      canvas.drawRRect(
+        bgRect,
+        Paint()..color = (isDarkMode ? Colors.black : Colors.white).withOpacity(0.72),
+      );
+      canvas.drawRRect(
+        bgRect,
+        Paint()
+          ..color = color.withOpacity(0.35)
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 1,
+      );
+      textPainter.paint(canvas, labelOffset);
     }
   }
 

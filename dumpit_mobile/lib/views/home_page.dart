@@ -607,21 +607,7 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
                           await _stopRecording();
                           Navigator.pop(context); // 录音完成关闭
                         } else {
-                          if (!_aiPrivacyAgreed) {
-                            final agreed = await ConfigDialogs.showAiPrivacyDialog(context: context, isZh: _isZh);
-                            if (agreed == true) {
-                              setState(() {
-                                _aiPrivacyAgreed = true;
-                              });
-                              final prefs = await SharedPreferences.getInstance();
-                              await prefs.setBool('dumpit_ai_privacy_agreed', true);
-                              setSheetState(() {});
-                              await _startRecording();
-                            }
-                          } else {
-                            await _startRecording();
-                            setSheetState(() {});
-                          }
+                          await _ensureConsentThenRecord(onGranted: () => setSheetState(() {}));
                         }
                       },
                     ),
@@ -663,6 +649,25 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
     }
   }
 
+  // 🔒 若未同意 AI 隐私授权则先弹窗征求同意，同意后（或已同意）立即开始录音
+  Future<void> _ensureConsentThenRecord({VoidCallback? onGranted}) async {
+    if (!_aiPrivacyAgreed) {
+      final agreed = await ConfigDialogs.showAiPrivacyDialog(context: context, isZh: _isZh);
+      if (agreed == true) {
+        setState(() {
+          _aiPrivacyAgreed = true;
+        });
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setBool('dumpit_ai_privacy_agreed', true);
+        await _startRecording();
+        onGranted?.call();
+      }
+    } else {
+      await _startRecording();
+      onGranted?.call();
+    }
+  }
+
   // 配置局域网 IP
   void _showIpConfig() {
     ConfigDialogs.showIpDialog(
@@ -680,6 +685,28 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
     final m = totalSecs ~/ 60;
     final s = totalSecs % 60;
     return '${m.toString().padLeft(2, '0')}:${s.toString().padLeft(2, '0')}';
+  }
+
+  // ⚙️ 偏好设置文本输入框（统一深色填充样式）
+  Widget _buildConfigField({
+    required TextEditingController controller,
+    required String hint,
+    int maxLines = 1,
+    ValueChanged<String>? onChanged,
+  }) {
+    return TextField(
+      controller: controller,
+      maxLines: maxLines,
+      style: const TextStyle(color: Colors.white, fontSize: 12),
+      decoration: InputDecoration(
+        hintText: hint,
+        hintStyle: const TextStyle(color: Colors.grey, fontSize: 12),
+        filled: true,
+        fillColor: Colors.black.withOpacity(0.2),
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+      ),
+      onChanged: onChanged,
+    );
   }
 
   // 📂 侧边栏抽屉分类文件夹按钮
@@ -1115,19 +1142,7 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
               if (_isRecording) {
                 await _stopRecording();
               } else {
-                if (!_aiPrivacyAgreed) {
-                  final agreed = await ConfigDialogs.showAiPrivacyDialog(context: context, isZh: _isZh);
-                  if (agreed == true) {
-                    setState(() {
-                      _aiPrivacyAgreed = true;
-                    });
-                    final prefs = await SharedPreferences.getInstance();
-                    await prefs.setBool('dumpit_ai_privacy_agreed', true);
-                    await _startRecording();
-                  }
-                } else {
-                  await _startRecording();
-                }
+                await _ensureConsentThenRecord();
               }
             },
             child: AnimatedContainer(
@@ -1211,55 +1226,27 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
         ),
         if (_showConfig) ...[
           const SizedBox(height: 10),
-          TextField(
+          _buildConfigField(
             controller: _toneController,
+            hint: _isZh ? '贴入您平时手写的段落，AI克隆文风...' : 'Paste your text sample to clone your tone...',
             maxLines: 3,
-            style: const TextStyle(color: Colors.white, fontSize: 12),
-            decoration: InputDecoration(
-              hintText: _isZh ? '贴入您平时手写的段落，AI克隆文风...' : 'Paste your text sample to clone your tone...',
-              hintStyle: const TextStyle(color: Colors.grey, fontSize: 12),
-              filled: true,
-              fillColor: Colors.black.withOpacity(0.2),
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-            ),
             onChanged: _saveToneSample,
           ),
           const SizedBox(height: 8),
-          TextField(
+          _buildConfigField(
             controller: _promptController,
-            style: const TextStyle(color: Colors.white, fontSize: 12),
-            decoration: InputDecoration(
-              hintText: _isZh ? '本次处理的额外指令（选填）...' : 'Extra prompt for this dump (optional)...',
-              hintStyle: const TextStyle(color: Colors.grey, fontSize: 12),
-              filled: true,
-              fillColor: Colors.black.withOpacity(0.2),
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-            ),
+            hint: _isZh ? '本次处理的额外指令（选填）...' : 'Extra prompt for this dump (optional)...',
           ),
           const SizedBox(height: 8),
-          TextField(
+          _buildConfigField(
             controller: _notionTokenController,
-            style: const TextStyle(color: Colors.white, fontSize: 12),
-            decoration: InputDecoration(
-              hintText: _isZh ? '输入 Notion Integration Token (secret_...)' : 'Notion Integration Token...',
-              hintStyle: const TextStyle(color: Colors.grey, fontSize: 12),
-              filled: true,
-              fillColor: Colors.black.withOpacity(0.2),
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-            ),
+            hint: _isZh ? '输入 Notion Integration Token (secret_...)' : 'Notion Integration Token...',
             onChanged: _saveNotionToken,
           ),
           const SizedBox(height: 8),
-          TextField(
+          _buildConfigField(
             controller: _notionPageController,
-            style: const TextStyle(color: Colors.white, fontSize: 12),
-            decoration: InputDecoration(
-              hintText: _isZh ? '输入 Notion 目标父 Page ID' : 'Notion Parent Page ID...',
-              hintStyle: const TextStyle(color: Colors.grey, fontSize: 12),
-              filled: true,
-              fillColor: Colors.black.withOpacity(0.2),
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-            ),
+            hint: _isZh ? '输入 Notion 目标父 Page ID' : 'Notion Parent Page ID...',
             onChanged: _saveNotionPageId,
           ),
           const SizedBox(height: 12),
