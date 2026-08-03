@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"log"
 	"net/http"
 	"os"
@@ -9,6 +10,7 @@ import (
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
 
+	"dumpit-backend/db"
 	"dumpit-backend/handlers"
 	"dumpit-backend/services"
 )
@@ -17,6 +19,14 @@ func main() {
 	// 加载环境变量，如果在本地运行没有 .env，将跳过并使用系统默认环境变量
 	if err := godotenv.Load(); err != nil {
 		log.Println("No .env file found, using system environment variables")
+	}
+
+	ctx := context.Background()
+	if err := db.Connect(ctx); err != nil {
+		log.Fatalf("failed to connect to database: %v", err)
+	}
+	if err := db.InitSchema(ctx); err != nil {
+		log.Fatalf("failed to initialize database schema: %v", err)
 	}
 
 	// 初始化服务层与处理器
@@ -36,7 +46,7 @@ func main() {
 	// 配置 CORS，允许开发环境下本地以及局域网跨域
 	e.Use(middleware.CORSWithConfig(middleware.CORSConfig{
 		AllowOrigins: []string{"*"},
-		AllowMethods: []string{http.MethodGet, http.MethodPost, http.MethodPut, http.MethodDelete, http.MethodOptions},
+		AllowMethods: []string{http.MethodGet, http.MethodPost, http.MethodPut, http.MethodPatch, http.MethodDelete, http.MethodOptions},
 		AllowHeaders: []string{echo.HeaderOrigin, echo.HeaderContentType, echo.HeaderAuthorization},
 	}))
 
@@ -54,11 +64,20 @@ func main() {
 		})
 	})
 
-	// 核心业务路由
+	// 无需登录的路由
 	e.POST("/api/process-audio", audioHandler.UploadAndProcessAudio)
 	e.POST("/api/notion/sync", notionHandler.Sync)
-	e.POST("/api/license/verify", handlers.VerifyLicenseHandler)
-	e.POST("/api/iap/verify", handlers.VerifyIAPHandler)
+	e.POST("/api/auth/verify", handlers.VerifyAuthHandler)
+
+	// 需要登录的路由：账号维度的订阅与历史记录同步
+	authorized := e.Group("", handlers.RequireAuth)
+	authorized.POST("/api/license/verify", handlers.VerifyLicenseHandler)
+	authorized.POST("/api/iap/verify", handlers.VerifyIAPHandler)
+	authorized.GET("/api/subscription", handlers.GetSubscriptionHandler)
+	authorized.POST("/api/history/import", handlers.ImportHistoryHandler)
+	authorized.POST("/api/history", handlers.CreateHistoryHandler)
+	authorized.GET("/api/history", handlers.ListHistoryHandler)
+	authorized.PATCH("/api/history/:id", handlers.PatchHistoryHandler)
 
 	// 获取端口配置，默认使用 8080
 	port := os.Getenv("PORT")
