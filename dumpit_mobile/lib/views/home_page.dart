@@ -12,6 +12,9 @@ import '../../services/iap_service.dart';
 import '../translations.dart';
 import 'widgets/restructured_details_sheet.dart';
 import 'widgets/config_dialogs.dart';
+import '../services/auth_service.dart';
+import '../services/sync_service.dart';
+import 'login_page.dart';
 
 class ToolLink {
   final String text;
@@ -117,7 +120,8 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
   void initState() {
     super.initState();
     _loadLocalSettings();
-    
+    _refreshLoginStatus();
+
     // 初始化应用内购买服务，监听交易更新事件
     IapService.instance.initialize(
       onSuccess: () {
@@ -213,6 +217,48 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
   Future<void> _saveNotionPageId(String val) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('dumpit_notion_page_id', val);
+  }
+
+  bool _isLoggedIn = false;
+
+  Future<void> _refreshLoginStatus() async {
+    final loggedIn = await AuthService.isLoggedIn();
+    if (mounted) {
+      setState(() {
+        _isLoggedIn = loggedIn;
+      });
+    }
+  }
+
+  /// 打开登录页；登录成功后一次性导入本地历史，再拉取云端历史合并展示
+  Future<void> _openAccountSync() async {
+    final loggedInNow = await Navigator.push<bool>(
+      context,
+      MaterialPageRoute(builder: (_) => const LoginPage()),
+    );
+    if (loggedInNow != true) return;
+
+    await _refreshLoginStatus();
+
+    final failed = await SyncService.importLocalHistory(_historyList);
+    if (failed.isNotEmpty) {
+      _showSnackBar(_isZh ? '${failed.length} 条记录导入失败，已跳过' : '${failed.length} records failed to import');
+    }
+
+    try {
+      final cloudRecords = await SyncService.pullAllHistory();
+      final localIds = _historyList.map((r) => r.id).toSet();
+      final newFromCloud = cloudRecords.where((r) => !localIds.contains(r.id)).toList();
+      if (newFromCloud.isNotEmpty) {
+        setState(() {
+          _historyList.insertAll(0, newFromCloud);
+        });
+        await _saveHistoryToLocal();
+      }
+      _showSnackBar(_isZh ? '云同步完成' : 'Cloud sync complete');
+    } catch (e) {
+      _showSnackBar(_isZh ? '拉取云端记录失败，稍后重试' : 'Failed to pull cloud records, will retry later');
+    }
   }
 
   // ⚡ 向 Go 后端发起同步到 Notion 的请求
@@ -487,6 +533,18 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
       // 先关闭 Loading Sheet
       Navigator.pop(context);
 
+      final newRecord = HistoryRecord(
+        id: DateTime.now().millisecondsSinceEpoch.toString(),
+        timestamp: DateTime.now().toLocal().toString().substring(0, 16),
+        rawText: '',
+        summary: summary,
+        actionItems: actions,
+        keyInsights: insights,
+        calendarEvents: events,
+        status: 'done',
+        folder: 'inbox',
+      );
+
       setState(() {
         _summary = summary;
         _actionItems = actions;
@@ -494,23 +552,15 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
         _calendarEvents = events;
         _status = 'done';
 
-        final newRecord = HistoryRecord(
-          id: DateTime.now().millisecondsSinceEpoch.toString(),
-          timestamp: DateTime.now().toLocal().toString().substring(0, 16),
-          rawText: '',
-          summary: summary,
-          actionItems: actions,
-          keyInsights: insights,
-          calendarEvents: events,
-          status: 'done',
-          folder: 'inbox',
-        );
-
         _historyList.insert(0, newRecord);
         _activeRecordId = newRecord.id;
       });
 
       await _saveHistoryToLocal();
+
+      // 云同步为尽力而为：失败不阻塞当前操作，本地数据始终是可用的兜底
+      unawaited(SyncService.pushRecord(newRecord));
+
       _showSnackBar(_isZh ? '脑力倾倒整理成功！' : 'Restructured successfully!');
       
       // 直接弹出结果详情页
@@ -1295,6 +1345,35 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
                   }
                 },
               ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      _isZh ? '账号与云同步' : 'Account & Cloud Sync',
+                      style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      _isLoggedIn
+                          ? (_isZh ? '已登录，历史记录与订阅状态已绑定账号' : 'Logged in — history and subscription are account-bound')
+                          : (_isZh ? '登录后可在换设备/重装时找回历史记录' : 'Log in to recover history after reinstall/device change'),
+                      style: const TextStyle(color: Colors.grey, fontSize: 10),
+                    ),
+                  ],
+                ),
+              ),
+              if (!_isLoggedIn)
+                TextButton(
+                  onPressed: _openAccountSync,
+                  child: Text(_isZh ? '登录' : 'Log In', style: const TextStyle(color: Colors.purpleAccent)),
+                ),
             ],
           ),
         ]
