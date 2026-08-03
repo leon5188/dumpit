@@ -8,12 +8,12 @@ import (
 
 // HistoryRecord 是某个账号的一条云端历史记录
 type HistoryRecord struct {
-	ID        string
-	UID       string
-	Summary   json.RawMessage
-	RawText   string
-	CreatedAt time.Time
-	Archived  bool
+	ID        string          `json:"id"`
+	UID       string          `json:"uid"`
+	Summary   json.RawMessage `json:"summary"`
+	RawText   string          `json:"raw_text"`
+	CreatedAt time.Time       `json:"created_at"`
+	Archived  bool            `json:"archived"`
 }
 
 // CreateHistoryRecord 插入一条新的历史记录，返回生成的 id
