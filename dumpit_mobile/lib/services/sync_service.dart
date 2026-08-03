@@ -2,11 +2,23 @@ import '../models/history_record.dart';
 import 'api_service.dart';
 import 'auth_service.dart';
 
+/// importLocalHistory 的结果：failedIds 是导入失败的本地记录 id；
+/// idMapping 是成功导入的记录的 本地(client) id -> 服务端新分配 id 映射，
+/// 调用方应据此改写本地记录的 id，避免后续 pull 时与云端记录重复。
+class ImportResult {
+  final List<String> failedIds;
+  final Map<String, String> idMapping;
+
+  const ImportResult({required this.failedIds, required this.idMapping});
+}
+
 class SyncService {
-  /// 首次登录时，把本地全部历史记录一次性导入云端，返回导入失败的本地记录 id 列表
-  static Future<List<String>> importLocalHistory(List<HistoryRecord> localRecords) async {
+  /// 首次登录时，把本地全部历史记录一次性导入云端
+  static Future<ImportResult> importLocalHistory(List<HistoryRecord> localRecords) async {
     final sessionToken = await AuthService.getSessionToken();
-    if (sessionToken == null || localRecords.isEmpty) return [];
+    if (sessionToken == null || localRecords.isEmpty) {
+      return const ImportResult(failedIds: [], idMapping: {});
+    }
 
     final records = localRecords.map((r) => {
       'client_id': r.id,
@@ -20,7 +32,12 @@ class SyncService {
     }).toList();
 
     final decoded = await ApiService.importHistory(sessionToken, records);
-    return List<String>.from(decoded['failed'] ?? []);
+    final failedIds = List<String>.from(decoded['failed'] ?? []);
+    final idMapping = <String, String>{
+      for (final entry in (decoded['imported'] as List? ?? []))
+        (entry as Map<String, dynamic>)['client_id'] as String: entry['server_id'] as String,
+    };
+    return ImportResult(failedIds: failedIds, idMapping: idMapping);
   }
 
   /// 新建一条记录后同步到云端；失败时调用方应把该记录标记为"待同步"，不要阻塞当前操作

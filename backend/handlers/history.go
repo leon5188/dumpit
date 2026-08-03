@@ -55,7 +55,12 @@ func ImportHistoryHandler(c echo.Context) error {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid request body"})
 	}
 
-	imported := make([]string, 0, len(req.Records))
+	type importedRecord struct {
+		ClientID string `json:"client_id"`
+		ServerID string `json:"server_id"`
+	}
+
+	imported := make([]importedRecord, 0, len(req.Records))
 	failed := make([]string, 0)
 
 	for _, item := range req.Records {
@@ -63,11 +68,12 @@ func ImportHistoryHandler(c echo.Context) error {
 			failed = append(failed, item.ClientID)
 			continue
 		}
-		if _, err := db.CreateHistoryRecord(c.Request().Context(), uid, item.Summary, item.RawText); err != nil {
+		serverID, err := db.CreateHistoryRecord(c.Request().Context(), uid, item.Summary, item.RawText)
+		if err != nil {
 			failed = append(failed, item.ClientID)
 			continue
 		}
-		imported = append(imported, item.ClientID)
+		imported = append(imported, importedRecord{ClientID: item.ClientID, ServerID: serverID})
 	}
 
 	return c.JSON(http.StatusOK, map[string]interface{}{

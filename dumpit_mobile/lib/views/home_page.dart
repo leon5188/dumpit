@@ -240,9 +240,24 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
 
     await _refreshLoginStatus();
 
-    final failed = await SyncService.importLocalHistory(_historyList);
-    if (failed.isNotEmpty) {
-      _showSnackBar(_isZh ? '${failed.length} 条记录导入失败，已跳过' : '${failed.length} records failed to import');
+    final importResult = await SyncService.importLocalHistory(_historyList);
+    if (importResult.failedIds.isNotEmpty) {
+      _showSnackBar(_isZh
+          ? '${importResult.failedIds.length} 条记录导入失败，已跳过'
+          : '${importResult.failedIds.length} records failed to import');
+    }
+    if (importResult.idMapping.isNotEmpty) {
+      setState(() {
+        _historyList = _historyList.map((r) {
+          final serverId = importResult.idMapping[r.id];
+          if (serverId == null) return r;
+          if (_activeRecordId == r.id) {
+            _activeRecordId = serverId;
+          }
+          return r.copyWith(id: serverId);
+        }).toList();
+      });
+      await _saveHistoryToLocal();
     }
 
     try {
