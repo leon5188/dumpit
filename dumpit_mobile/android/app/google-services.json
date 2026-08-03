@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "850734062900",
+    "project_id": "brainvent-9704a",
+    "storage_bucket": "brainvent-9704a.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:850734062900:android:ea09f96ad1367bf151d961",
+        "android_client_info": {
+          "package_name": "com.example.dumpit_mobile"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBMc3ReblVTqLb1dr2f7VbaZvQ9lDiadng"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

@@ -1,6 +1,8 @@
 import 'dart:io';
+import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:path_provider/path_provider.dart';
+import 'firebase_options.dart';
 import 'views/home_page.dart';
 
 void _cleanLegacyTempFiles() async {
@@ -17,8 +19,9 @@ void _cleanLegacyTempFiles() async {
   } catch (_) {}
 }
 
-void main() {
+void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
   _cleanLegacyTempFiles();
   runApp(const BrainVentApp());
 }
