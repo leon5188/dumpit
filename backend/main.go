@@ -21,6 +21,13 @@ func main() {
 		log.Println("No .env file found, using system environment variables")
 	}
 
+	if os.Getenv("SESSION_JWT_SECRET") == "" {
+		log.Fatalf("SESSION_JWT_SECRET environment variable is required")
+	}
+	if os.Getenv("FIREBASE_PROJECT_ID") == "" {
+		log.Fatalf("FIREBASE_PROJECT_ID environment variable is required")
+	}
+
 	ctx := context.Background()
 	if err := db.Connect(ctx); err != nil {
 		log.Fatalf("failed to connect to database: %v", err)
