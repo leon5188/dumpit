@@ -135,4 +135,93 @@ class ApiService {
       defaultErrorMsg: '登录验证失败',
     );
   }
+
+  /// 附带登录态的 JSON POST 请求
+  static Future<Map<String, dynamic>> _postJsonAuthed(
+    String path,
+    Map<String, dynamic> body, {
+    required String sessionToken,
+    required String defaultErrorMsg,
+  }) async {
+    final uri = Uri.parse('$baseUrl$path');
+    final http.Response response;
+    try {
+      response = await http.post(
+        uri,
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $sessionToken',
+        },
+        body: json.encode(body),
+      ).timeout(const Duration(seconds: 15));
+    } catch (e) {
+      throw Exception('网络连接失败: $e');
+    }
+
+    final decoded = json.decode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
+    if (response.statusCode == 200) {
+      return decoded;
+    }
+    throw Exception(decoded['error'] ?? defaultErrorMsg);
+  }
+
+  /// 附带登录态的 JSON GET 请求
+  static Future<Map<String, dynamic>> _getJsonAuthed(
+    String path, {
+    required String sessionToken,
+    required String defaultErrorMsg,
+  }) async {
+    final uri = Uri.parse('$baseUrl$path');
+    final http.Response response;
+    try {
+      response = await http.get(
+        uri,
+        headers: {'Authorization': 'Bearer $sessionToken'},
+      ).timeout(const Duration(seconds: 15));
+    } catch (e) {
+      throw Exception('网络连接失败: $e');
+    }
+
+    final decoded = json.decode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
+    if (response.statusCode == 200) {
+      return decoded;
+    }
+    throw Exception(decoded['error'] ?? defaultErrorMsg);
+  }
+
+  /// 首次登录批量导入本地历史记录
+  static Future<Map<String, dynamic>> importHistory(
+    String sessionToken,
+    List<Map<String, dynamic>> records,
+  ) async {
+    return _postJsonAuthed(
+      '/api/history/import',
+      {'records': records},
+      sessionToken: sessionToken,
+      defaultErrorMsg: '历史记录导入失败',
+    );
+  }
+
+  /// 新建一条云端历史记录
+  static Future<Map<String, dynamic>> createHistory(
+    String sessionToken,
+    Map<String, dynamic> summary,
+    String rawText,
+  ) async {
+    return _postJsonAuthed(
+      '/api/history',
+      {'summary': summary, 'raw_text': rawText},
+      sessionToken: sessionToken,
+      defaultErrorMsg: '云端保存失败',
+    );
+  }
+
+  /// 拉取云端历史记录（全部，不做增量，重装/换设备场景足够用）
+  static Future<Map<String, dynamic>> listHistory(String sessionToken) async {
+    return _getJsonAuthed(
+      '/api/history',
+      sessionToken: sessionToken,
+      defaultErrorMsg: '拉取历史记录失败',
+    );
+  }
 }
