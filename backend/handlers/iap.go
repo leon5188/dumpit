@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/labstack/echo/v4"
@@ -106,18 +107,21 @@ func verifyReceiptWithApple(url string, receiptData string) (bool, int, error) {
 
 	// status == 0 表示校验成功且收据有效
 	if appleResp.Status == 0 {
-		// 校验是否包含了我们需要的黄金会员产品 ID
+		// 必须精确匹配我们自己的黄金会员产品 ID，防止其他 App/商品的收据被误判为已付费；
+		// 订阅类商品还需确认尚未过期（终身买断商品没有 expires_date_ms，视为永久有效）
 		hasPremium := false
 		for _, item := range appleResp.Receipt.InApp {
-			if item.ProductID == "dumpit_premium_monthly_sub" || item.ProductID == "dumpit_premium_lifetime_buy" {
-				hasPremium = true
-				break
+			if item.ProductID != "dumpit_premium_monthly_sub" && item.ProductID != "dumpit_premium_lifetime_buy" {
+				continue
 			}
-		}
-		
-		// 为了保证审核顺利，如果 in_app 不为空，就说明有成功内购，可以认为验证成功。
-		if !hasPremium && len(appleResp.Receipt.InApp) > 0 {
+			if item.ExpiresDateMs != "" {
+				expiresMs, err := strconv.ParseInt(item.ExpiresDateMs, 10, 64)
+				if err != nil || time.UnixMilli(expiresMs).Before(time.Now()) {
+					continue
+				}
+			}
 			hasPremium = true
+			break
 		}
 
 		return hasPremium, appleResp.Status, nil

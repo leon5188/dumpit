@@ -5,6 +5,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"os"
 	"strings"
 	"time"
 
@@ -46,8 +47,10 @@ func VerifyLicenseHandler(c echo.Context) error {
 		})
 	}
 
-	// 🔑 本地测试万能激活码判定
-	if req.LicenseKey == "BRAINVENT-LOCAL-PRO-2026" || req.LicenseKey == "LOCAL-TEST-KEY" {
+	// 🔑 本地测试万能激活码判定（仅在显式设置 APP_ENV=development 的本地/测试环境生效，
+	// 生产环境不设置该变量则测试码自动失效，防止被逆向找到后白嫖激活）
+	isTestKey := req.LicenseKey == "BRAINVENT-LOCAL-PRO-2026" || req.LicenseKey == "LOCAL-TEST-KEY"
+	if isTestKey && os.Getenv("APP_ENV") == "development" {
 		return c.JSON(http.StatusOK, map[string]interface{}{
 			"success":          true,
 			"status":           "active",
