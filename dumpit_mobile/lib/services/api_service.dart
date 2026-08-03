@@ -117,11 +117,12 @@ class ApiService {
     return true;
   }
 
-  /// 🔒 向 Go 后端发起 Apple IAP 支付票据（收据）校验
-  static Future<bool> verifyReceipt(String receiptData) async {
-    final decoded = await _postJson(
+  /// 🔒 向 Go 后端发起 Apple IAP 支付票据（收据）校验；订阅与账号绑定，需登录态
+  static Future<bool> verifyReceipt(String receiptData, {required String sessionToken}) async {
+    final decoded = await _postJsonAuthed(
       '/api/iap/verify',
       {'receipt_data': receiptData},
+      sessionToken: sessionToken,
       defaultErrorMsg: '购买凭证校验失败',
     );
     return decoded['success'] == true;

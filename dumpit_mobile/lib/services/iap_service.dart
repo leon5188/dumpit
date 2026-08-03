@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import 'package:in_app_purchase/in_app_purchase.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'api_service.dart';
+import 'auth_service.dart';
 
 class IapService {
   IapService._internal();
@@ -83,8 +84,13 @@ class IapService {
     }
   }
 
-  /// 发起购买内购商品
+  /// 发起购买内购商品；订阅与账号绑定，购买前必须已登录
   Future<void> buyProduct(String productId) async {
+    if (!await AuthService.isLoggedIn()) {
+      onPurchaseError?.call('请先登录账号，购买的会员资格将与您的账号绑定');
+      return;
+    }
+
     if (!_isAvailable) {
       onPurchaseError?.call('内购服务暂不可用，请稍后再试');
       return;
@@ -145,10 +151,18 @@ class IapService {
         
         // 获取苹果收据 Base64 数据
         final receipt = purchaseDetails.verificationData.serverVerificationData;
-        
+
         try {
+          final sessionToken = await AuthService.getSessionToken();
+          if (sessionToken == null) {
+            onPurchaseError?.call('请先登录账号后再验证购买凭证');
+            if (purchaseDetails.pendingCompletePurchase) {
+              await _inAppPurchase.completePurchase(purchaseDetails);
+            }
+            continue;
+          }
           // 调用 Go 后端验证
-          final verified = await ApiService.verifyReceipt(receipt);
+          final verified = await ApiService.verifyReceipt(receipt, sessionToken: sessionToken);
           if (verified) {
             final prefs = await SharedPreferences.getInstance();
             await prefs.setBool('dumpit_is_premium', true);

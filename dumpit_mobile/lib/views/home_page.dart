@@ -921,8 +921,17 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
               child: SafeArea(
                 top: false,
                 child: GestureDetector(
-                  onTap: () {
+                  onTap: () async {
                     Navigator.of(context).pop(); // 先关闭侧边栏
+                    // 会员资格与账号绑定，购买前必须先登录
+                    if (!await AuthService.isLoggedIn()) {
+                      _showSnackBar(_isZh
+                          ? '请先登录账号，购买的会员资格将与您的账号绑定'
+                          : 'Please log in first — your membership will be tied to your account');
+                      await _openAccountSync();
+                      if (!await AuthService.isLoggedIn()) return;
+                    }
+                    if (!mounted) return;
                     ConfigDialogs.showIapPaywall(
                       context: context,
                       isZh: _isZh,
