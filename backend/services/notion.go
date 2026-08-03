@@ -24,6 +24,45 @@ type NotionSyncRequest struct {
 	CalendarEvents []CalendarEvent `json:"calendar_events"`
 }
 
+// richText 构造 Notion 富文本片段
+func richText(content string) []map[string]interface{} {
+	return []map[string]interface{}{
+		{"text": map[string]interface{}{"content": content}},
+	}
+}
+
+// headingBlock 构造 H2 标题 block
+func headingBlock(content string) map[string]interface{} {
+	return map[string]interface{}{
+		"object":    "block",
+		"type":      "heading_2",
+		"heading_2": map[string]interface{}{"rich_text": richText(content)},
+	}
+}
+
+// todoBlock 构造未勾选的待办 block
+func todoBlock(content string) map[string]interface{} {
+	return map[string]interface{}{
+		"object": "block",
+		"type":   "to_do",
+		"to_do": map[string]interface{}{
+			"rich_text": richText(content),
+			"checked":   false,
+		},
+	}
+}
+
+// bulletBlock 构造无序列表 block
+func bulletBlock(content string) map[string]interface{} {
+	return map[string]interface{}{
+		"object": "block",
+		"type":   "bulleted_list_item",
+		"bulleted_list_item": map[string]interface{}{
+			"rich_text": richText(content),
+		},
+	}
+}
+
 // SyncToNotion 将整理的内容推送到 Notion 页面下
 func (s *NotionService) SyncToNotion(req NotionSyncRequest) error {
 	url := "https://api.notion.com/v1/pages"
@@ -31,135 +70,35 @@ func (s *NotionService) SyncToNotion(req NotionSyncRequest) error {
 	// 1. 构建 Notion API Body
 	var children []map[string]interface{}
 
-	// 添加 H2 整理文标题
+	// 添加 H2 整理文标题 + 内容段落
+	children = append(children, headingBlock("📝 语气重构整理 (Summary)"))
 	children = append(children, map[string]interface{}{
-		"object": "block",
-		"type":   "heading_2",
-		"heading_2": map[string]interface{}{
-			"rich_text": []map[string]interface{}{
-				{
-					"text": map[string]interface{}{
-						"content": "📝 语气重构整理 (Summary)",
-					},
-				},
-			},
-		},
+		"object":    "block",
+		"type":      "paragraph",
+		"paragraph": map[string]interface{}{"rich_text": richText(req.Summary)},
 	})
 
-	// 添加整理文内容段落
-	children = append(children, map[string]interface{}{
-		"object": "block",
-		"type":   "paragraph",
-		"paragraph": map[string]interface{}{
-			"rich_text": []map[string]interface{}{
-				{
-					"text": map[string]interface{}{
-						"content": req.Summary,
-					},
-				},
-			},
-		},
-	})
-
-	// 添加 H2 待办清单标题
+	// 添加 H2 待办清单标题 + to_do block
 	if len(req.ActionItems) > 0 {
-		children = append(children, map[string]interface{}{
-			"object": "block",
-			"type":   "heading_2",
-			"heading_2": map[string]interface{}{
-				"rich_text": []map[string]interface{}{
-					{
-						"text": map[string]interface{}{
-							"content": "✅ 行动待办清单 (Todos)",
-						},
-					},
-				},
-			},
-		})
-
-		// 遍历添加 to_do 类型的 block
+		children = append(children, headingBlock("✅ 行动待办清单 (Todos)"))
 		for _, item := range req.ActionItems {
-			children = append(children, map[string]interface{}{
-				"object": "block",
-				"type":   "to_do",
-				"to_do": map[string]interface{}{
-					"rich_text": []map[string]interface{}{
-						{
-							"text": map[string]interface{}{
-								"content": item,
-							},
-						},
-					},
-					"checked": false,
-				},
-			})
+			children = append(children, todoBlock(item))
 		}
 	}
 
 	// 添加 H2 脑力网状连线（作为 bullet 点）
 	if len(req.KeyInsights) > 0 {
-		children = append(children, map[string]interface{}{
-			"object": "block",
-			"type":   "heading_2",
-			"heading_2": map[string]interface{}{
-				"rich_text": []map[string]interface{}{
-					{
-						"text": map[string]interface{}{
-							"content": "🕸️ 深度脑力洞察 (Insights)",
-						},
-					},
-				},
-			},
-		})
-
+		children = append(children, headingBlock("🕸️ 深度脑力洞察 (Insights)"))
 		for _, insight := range req.KeyInsights {
-			children = append(children, map[string]interface{}{
-				"object": "block",
-				"type":   "bulleted_list_item",
-				"bulleted_list_item": map[string]interface{}{
-					"rich_text": []map[string]interface{}{
-						{
-							"text": map[string]interface{}{
-								"content": insight,
-							},
-						},
-					},
-				},
-			})
+			children = append(children, bulletBlock(insight))
 		}
 	}
 
 	// 添加日程时间轴
 	if len(req.CalendarEvents) > 0 {
-		children = append(children, map[string]interface{}{
-			"object": "block",
-			"type":   "heading_2",
-			"heading_2": map[string]interface{}{
-				"rich_text": []map[string]interface{}{
-					{
-						"text": map[string]interface{}{
-							"content": "📅 时间轴行程规划 (Timeline)",
-						},
-					},
-				},
-			},
-		})
-
+		children = append(children, headingBlock("📅 时间轴行程规划 (Timeline)"))
 		for _, event := range req.CalendarEvents {
-			children = append(children, map[string]interface{}{
-				"object": "block",
-				"type":   "to_do",
-				"to_do": map[string]interface{}{
-					"rich_text": []map[string]interface{}{
-						{
-							"text": map[string]interface{}{
-								"content": fmt.Sprintf("[%s] %s", event.Time, event.Title),
-							},
-						},
-					},
-					"checked": false,
-				},
-			})
+			children = append(children, todoBlock(fmt.Sprintf("[%s] %s", event.Time, event.Title)))
 		}
 	}
 

@@ -65,6 +65,31 @@ class ApiService {
     }
   }
 
+  /// 向后端发起 JSON POST 请求，成功时返回解析后的响应体，失败时抛出带错误信息的异常
+  static Future<Map<String, dynamic>> _postJson(
+    String path,
+    Map<String, dynamic> body, {
+    required String defaultErrorMsg,
+  }) async {
+    final uri = Uri.parse('$baseUrl$path');
+    final http.Response response;
+    try {
+      response = await http.post(
+        uri,
+        headers: {'Content-Type': 'application/json'},
+        body: json.encode(body),
+      ).timeout(const Duration(seconds: 15));
+    } catch (e) {
+      throw Exception('网络连接失败: $e');
+    }
+
+    final decoded = json.decode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
+    if (response.statusCode == 200) {
+      return decoded;
+    }
+    throw Exception(decoded['error'] ?? defaultErrorMsg);
+  }
+
   /// 将脑力整理卡片的内容一键推送到用户的 Notion
   static Future<bool> syncToNotion({
     required String notionToken,
@@ -74,80 +99,31 @@ class ApiService {
     required List<String> keyInsights,
     required List<dynamic> calendarEvents,
   }) async {
-    final uri = Uri.parse('$baseUrl/api/notion/sync');
-    
-    final body = json.encode({
-      'notion_token': notionToken,
-      'parent_page_id': parentPageId,
-      'summary': summary,
-      'action_items': actionItems,
-      'key_insights': keyInsights,
-      'calendar_events': calendarEvents.map((e) => {
-        'title': e.title,
-        'time': e.time,
-      }).toList(),
-    });
-
-    try {
-      final response = await http.post(
-        uri,
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: body,
-      ).timeout(const Duration(seconds: 15));
-
-      if (response.statusCode == 200) {
-        return true;
-      } else {
-        String errorMsg = 'Notion同步失败';
-        try {
-          final errBody = json.decode(utf8.decode(response.bodyBytes));
-          if (errBody['error'] != null) {
-            errorMsg = errBody['error'];
-          }
-        } catch (_) {}
-        throw Exception(errorMsg);
-      }
-    } catch (e) {
-      throw Exception('网络连接失败: $e');
-    }
+    await _postJson(
+      '/api/notion/sync',
+      {
+        'notion_token': notionToken,
+        'parent_page_id': parentPageId,
+        'summary': summary,
+        'action_items': actionItems,
+        'key_insights': keyInsights,
+        'calendar_events': calendarEvents.map((e) => {
+          'title': e.title,
+          'time': e.time,
+        }).toList(),
+      },
+      defaultErrorMsg: 'Notion同步失败',
+    );
+    return true;
   }
 
   /// 🔒 向 Go 后端发起 Apple IAP 支付票据（收据）校验
   static Future<bool> verifyReceipt(String receiptData) async {
-    final uri = Uri.parse('$baseUrl/api/iap/verify');
-    final body = json.encode({
-      'receipt_data': receiptData,
-    });
-
-    try {
-      final response = await http.post(
-        uri,
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: body,
-      ).timeout(const Duration(seconds: 15));
-
-      if (response.statusCode == 200) {
-        final decoded = json.decode(utf8.decode(response.bodyBytes));
-        if (decoded['success'] == true) {
-          return true;
-        }
-        return false;
-      } else {
-        String errorMsg = '购买凭证校验失败';
-        try {
-          final errBody = json.decode(utf8.decode(response.bodyBytes));
-          if (errBody['error'] != null) {
-            errorMsg = errBody['error'];
-          }
-        } catch (_) {}
-        throw Exception(errorMsg);
-      }
-    } catch (e) {
-      throw Exception('网络连接失败: $e');
-    }
+    final decoded = await _postJson(
+      '/api/iap/verify',
+      {'receipt_data': receiptData},
+      defaultErrorMsg: '购买凭证校验失败',
+    );
+    return decoded['success'] == true;
   }
 }

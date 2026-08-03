@@ -43,21 +43,22 @@ func VerifyIAPHandler(c echo.Context) error {
 		})
 	}
 
-	// 1. 先尝试在 App Store 生产网关验证收据
-	success, status, err := verifyReceiptWithApple("https://buy.itunes.apple.com/verifyReceipt", req.ReceiptData)
-	if err != nil {
-		return c.JSON(http.StatusInternalServerError, map[string]string{
-			"error": "failed to connect to Apple Server: " + err.Error(),
-		})
-	}
-
-	// 2. 如果状态码是 21007，说明是 Sandbox（沙盒测试）收据，应当去沙盒网关重新校验
-	if status == 21007 {
-		success, status, err = verifyReceiptWithApple("https://sandbox.itunes.apple.com/verifyReceipt", req.ReceiptData)
+	// 依次尝试生产网关和沙盒网关（状态码 21007 表示应改用沙盒收据重新校验）
+	var success bool
+	var status int
+	var err error
+	for _, gateway := range []string{
+		"https://buy.itunes.apple.com/verifyReceipt",
+		"https://sandbox.itunes.apple.com/verifyReceipt",
+	} {
+		success, status, err = verifyReceiptWithApple(gateway, req.ReceiptData)
 		if err != nil {
 			return c.JSON(http.StatusInternalServerError, map[string]string{
-				"error": "failed to connect to Apple Sandbox Server: " + err.Error(),
+				"error": "failed to connect to Apple Server: " + err.Error(),
 			})
+		}
+		if status != 21007 {
+			break
 		}
 	}
 
