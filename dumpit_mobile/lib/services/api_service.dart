@@ -225,4 +225,13 @@ class ApiService {
       defaultErrorMsg: '拉取历史记录失败',
     );
   }
+
+  /// 拉取当前账号的订阅状态，用于重装/换设备登录后恢复会员权限
+  static Future<Map<String, dynamic>> getSubscription(String sessionToken) async {
+    return _getJsonAuthed(
+      '/api/subscription',
+      sessionToken: sessionToken,
+      defaultErrorMsg: '拉取订阅状态失败',
+    );
+  }
 }

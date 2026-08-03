@@ -228,6 +228,35 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
         _isLoggedIn = loggedIn;
       });
     }
+    if (loggedIn) {
+      await _restoreSubscriptionFromAccount();
+    }
+  }
+
+  /// 登录后向后端确认账号维度的订阅状态，恢复会员权限（仅恢复，不做吊销）
+  Future<void> _restoreSubscriptionFromAccount() async {
+    try {
+      final sessionToken = await AuthService.getSessionToken();
+      if (sessionToken == null) return;
+
+      final sub = await ApiService.getSubscription(sessionToken);
+      if (sub['subscribed'] != true) return;
+
+      final expiresAtRaw = sub['expires_at'] as String?;
+      final isActive = expiresAtRaw == null ||
+          (DateTime.tryParse(expiresAtRaw)?.isAfter(DateTime.now()) ?? true);
+      if (!isActive) return;
+
+      if (mounted) {
+        setState(() {
+          _isPremium = true;
+        });
+      }
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool('dumpit_is_premium', true);
+    } catch (_) {
+      // 网络失败等场景：这是恢复/增强路径，不吊销本地已有的会员状态
+    }
   }
 
   /// 打开登录页；登录成功后一次性导入本地历史，再拉取云端历史合并展示
