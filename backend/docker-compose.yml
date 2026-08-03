@@ -1,0 +1,14 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: dumpit
+      POSTGRES_PASSWORD: dumpit_dev_password
+      POSTGRES_DB: dumpit
+    ports:
+      - "5432:5432"
+    volumes:
+      - dumpit_postgres_data:/var/lib/postgresql/data
+
+volumes:
+  dumpit_postgres_data:
