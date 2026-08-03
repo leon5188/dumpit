@@ -4,13 +4,16 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
+	"dumpit-backend/db"
 	"dumpit-backend/services"
 	"github.com/labstack/echo/v4"
 )
@@ -23,6 +26,45 @@ func NewAudioHandler(openAIService *services.OpenAIService) *AudioHandler {
 	return &AudioHandler{
 		openAIService: openAIService,
 	}
+}
+
+// optionalUID 尝试从 Authorization 头解析登录态；未登录或无效时返回空字符串，不阻断匿名请求
+func optionalUID(c echo.Context) string {
+	header := c.Request().Header.Get("Authorization")
+	if !strings.HasPrefix(header, "Bearer ") {
+		return ""
+	}
+	uid, err := services.ParseSessionToken(strings.TrimPrefix(header, "Bearer "))
+	if err != nil {
+		return ""
+	}
+	return uid
+}
+
+// formatToneSample 把历史 summary 列表拼接成动态文风样例；输入为空或全部无效时返回空字符串
+func formatToneSample(summaries []json.RawMessage) string {
+	var parts []string
+	for _, raw := range summaries {
+		var parsed struct {
+			Summary string `json:"summary"`
+		}
+		if err := json.Unmarshal(raw, &parsed); err != nil {
+			continue
+		}
+		if parsed.Summary != "" {
+			parts = append(parts, parsed.Summary)
+		}
+	}
+	return strings.Join(parts, "\n---\n")
+}
+
+// buildToneSampleFromHistory 取该账号最近若干条历史记录，拼接成动态文风样例供 RestructureDump 使用
+func buildToneSampleFromHistory(ctx context.Context, uid string) (string, error) {
+	summaries, err := db.RecentSummaries(ctx, uid, 5)
+	if err != nil {
+		return "", err
+	}
+	return formatToneSample(summaries), nil
 }
 
 // generateRandomHex 生成指定长度的随机十六进制字符串
@@ -97,6 +139,15 @@ func (h *AudioHandler) UploadAndProcessAudio(c echo.Context) error {
 	// 3. 读取表单中的其他配置参数
 	userToneSample := c.FormValue("user_tone_sample") // 用户风格文样例
 	customPrompt := c.FormValue("custom_prompt")     // 额外大模型处理要求
+
+	// 3.5 若已登录且未手动提供文风样例，则从账号历史自动生成动态文风样例（手动填写的样例仍可覆盖）
+	if userToneSample == "" {
+		if uid := optionalUID(c); uid != "" {
+			if sample, err := buildToneSampleFromHistory(ctx, uid); err == nil && sample != "" {
+				userToneSample = sample
+			}
+		}
+	}
 
 	// 4. 调用 Whisper 翻译音频
 	rawText, err := h.openAIService.TranscribeAudio(ctx, tempFileName)
