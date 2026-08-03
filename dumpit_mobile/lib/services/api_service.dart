@@ -126,4 +126,13 @@ class ApiService {
     );
     return decoded['success'] == true;
   }
+
+  /// 用 Firebase ID Token 向后端换取 session token（首次登录自动建号）
+  static Future<Map<String, dynamic>> verifyFirebaseIdToken(String idToken) async {
+    return _postJson(
+      '/api/auth/verify',
+      {'id_token': idToken},
+      defaultErrorMsg: '登录验证失败',
+    );
+  }
 }
