@@ -10,6 +10,8 @@ import (
 	"time"
 
 	"github.com/labstack/echo/v4"
+
+	"dumpit-backend/db"
 )
 
 // LicenseRequest 客户端发送的激活请求
@@ -20,8 +22,8 @@ type LicenseRequest struct {
 
 // LemonSqueezyResponse Lemon Squeezy 激活接口的响应结构
 type LemonSqueezyResponse struct {
-	Activated bool   `json:"activated"`
-	Error     string `json:"error"`
+	Activated  bool   `json:"activated"`
+	Error      string `json:"error"`
 	LicenseKey struct {
 		ID              int    `json:"id"`
 		Status          string `json:"status"`
@@ -32,7 +34,7 @@ type LemonSqueezyResponse struct {
 	} `json:"license_key"`
 }
 
-// VerifyLicenseHandler 核销激活码的处理器
+// VerifyLicenseHandler 核销激活码，成功后把订阅状态写入当前登录账号
 func VerifyLicenseHandler(c echo.Context) error {
 	var req LicenseRequest
 	if err := c.Bind(&req); err != nil {
@@ -47,10 +49,18 @@ func VerifyLicenseHandler(c echo.Context) error {
 		})
 	}
 
+	uid := UIDFromContext(c)
+
 	// 🔑 本地测试万能激活码判定（仅在显式设置 APP_ENV=development 的本地/测试环境生效，
 	// 生产环境不设置该变量则测试码自动失效，防止被逆向找到后白嫖激活）
 	isTestKey := req.LicenseKey == "BRAINVENT-LOCAL-PRO-2026" || req.LicenseKey == "LOCAL-TEST-KEY"
 	if isTestKey && os.Getenv("APP_ENV") == "development" {
+		testExpiry := time.Date(2099, 12, 31, 23, 59, 59, 0, time.UTC)
+		if err := db.UpsertSubscription(c.Request().Context(), uid, "brainvent_local_test_license", &testExpiry, "license_code"); err != nil {
+			return c.JSON(http.StatusInternalServerError, map[string]string{
+				"error": "failed to save subscription: " + err.Error(),
+			})
+		}
 		return c.JSON(http.StatusOK, map[string]interface{}{
 			"success":          true,
 			"status":           "active",
@@ -70,7 +80,6 @@ func VerifyLicenseHandler(c echo.Context) error {
 	}
 	form.Set("instance_name", instanceName)
 
-	// 创建 HTTP 请求（使用 Context 绑定生命周期，支持在连接中断时中止内部请求）
 	httpReq, err := http.NewRequestWithContext(c.Request().Context(), "POST", apiURL, strings.NewReader(form.Encode()))
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]string{
@@ -78,11 +87,9 @@ func VerifyLicenseHandler(c echo.Context) error {
 		})
 	}
 
-	// 设置 Headers
 	httpReq.Header.Set("Accept", "application/json")
 	httpReq.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 
-	// 执行请求，配置 10 秒超时防止请求挂起僵死
 	client := &http.Client{
 		Timeout: 10 * time.Second,
 	}
@@ -101,17 +108,14 @@ func VerifyLicenseHandler(c echo.Context) error {
 		})
 	}
 
-	// 解析响应
 	var lsResp LemonSqueezyResponse
 	if err := json.Unmarshal(bodyBytes, &lsResp); err != nil {
-		// 如果解析 JSON 失败，可能接口返回了错误信息或者是纯文本
 		return c.JSON(http.StatusBadRequest, map[string]string{
 			"error": "failed to verify license: key might be invalid or expired",
 			"raw":   string(bodyBytes),
 		})
 	}
 
-	// 判断是否激活成功
 	if lsResp.Error != "" {
 		return c.JSON(http.StatusBadRequest, map[string]string{
 			"error": lsResp.Error,
@@ -124,7 +128,19 @@ func VerifyLicenseHandler(c echo.Context) error {
 		})
 	}
 
-	// 激活成功！返回加密激活凭证签名（此处为了纯客户端简单处理，返回核销成功的元数据）
+	var expiresAt *time.Time
+	if lsResp.LicenseKey.ExpiresAt != "" {
+		if parsed, err := time.Parse(time.RFC3339, lsResp.LicenseKey.ExpiresAt); err == nil {
+			expiresAt = &parsed
+		}
+	}
+
+	if err := db.UpsertSubscription(c.Request().Context(), uid, "brainvent_premium_license", expiresAt, "license_code"); err != nil {
+		return c.JSON(http.StatusInternalServerError, map[string]string{
+			"error": "failed to save subscription: " + err.Error(),
+		})
+	}
+
 	return c.JSON(http.StatusOK, map[string]interface{}{
 		"success":          true,
 		"status":           lsResp.LicenseKey.Status,
