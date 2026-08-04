@@ -6,48 +6,10 @@ import MindWeb from "./components/MindWeb";
 import TodoManager from "./components/TodoManager";
 import TimelineView from "./components/TimelineView";
 import GlobalMindLandscape from "./components/GlobalMindLandscape";
-
-// 历史记录接口
-interface HistoryRecord {
-	id: string;
-	timestamp: string;
-	rawText: string;
-	summary: string;
-	actionItems: string[];
-	keyInsights: string[];
-	calendarEvents: CalendarEvent[];
-	status?: "done" | "offline_pending" | "syncing" | "error";
-	folder?: "inbox" | "archive" | "trash";
-	offlineAudio?: string;
-	toneSample?: string;
-	prompt?: string;
-}
+import { getBackendUrl } from "./lib/api";
+import { HistoryRecord } from "./lib/types";
 
 export default function Home() {
-	// 🌐 动态计算后端基准 API URL，优先使用用户配置的自定义基准地址，兼容本地/局域网及 HTTPS 部署
-	const getBackendUrl = (path: string): string => {
-		if (typeof window !== "undefined") {
-			const savedUrl = localStorage.getItem("dumpit_backend_url");
-			if (savedUrl) {
-				const cleanBase = savedUrl.endsWith("/") ? savedUrl.slice(0, -1) : savedUrl;
-				return `${cleanBase}${path}`;
-			}
-		}
-		// 🌍 读取生产部署环境变量作为默认值（如部署在 Render 上）
-		const defaultEnvUrl = process.env.NEXT_PUBLIC_API_URL;
-		if (defaultEnvUrl) {
-			const cleanEnv = defaultEnvUrl.endsWith("/") ? defaultEnvUrl.slice(0, -1) : defaultEnvUrl;
-			return `${cleanEnv}${path}`;
-		}
-		if (typeof window === "undefined") return `http://localhost:8080${path}`;
-		if (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1") {
-			return `http://localhost:8080${path}`;
-		}
-		const protocol = window.location.protocol;
-		const hostname = window.location.hostname;
-		return `${protocol}//${hostname}:8080${path}`;
-	};
-
 	// 多语言控制
 	const [lang, setLang] = useState<"zh" | "en">("zh");
 	const t = translations[lang];
