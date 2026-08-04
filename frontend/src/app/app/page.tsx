@@ -553,25 +553,32 @@ ${calendarEvents.map(event => `- **${event.title}** (${event.time})`).join("\n")
 		const raw = localStorage.getItem("dumpit_history");
 		const localRecords: HistoryRecord[] = raw ? JSON.parse(raw) : [];
 
-		const importResult = await importLocalHistory(localRecords);
-		if (importResult.failedIds.length > 0) {
-			showToast(
-				lang === "zh"
-					? `${importResult.failedIds.length} 条记录导入失败，已跳过`
-					: `${importResult.failedIds.length} records failed to import`
-			);
-		}
-
 		let mergedHistory = localRecords;
-		if (Object.keys(importResult.idMapping).length > 0) {
-			let newActiveId: string | null = null;
-			mergedHistory = localRecords.map((r) => {
-				const serverId = importResult.idMapping[r.id];
-				if (!serverId) return r;
-				if (activeRecordId === r.id) newActiveId = serverId;
-				return { ...r, id: serverId };
-			});
-			if (newActiveId) setActiveRecordId(newActiveId);
+		try {
+			const importResult = await importLocalHistory(localRecords);
+			if (importResult.failedIds.length > 0) {
+				showToast(
+					lang === "zh"
+						? `${importResult.failedIds.length} 条记录导入失败，已跳过`
+						: `${importResult.failedIds.length} records failed to import`
+				);
+			}
+
+			if (Object.keys(importResult.idMapping).length > 0) {
+				let newActiveId: string | null = null;
+				mergedHistory = localRecords.map((r) => {
+					const serverId = importResult.idMapping[r.id];
+					if (!serverId) return r;
+					if (activeRecordId === r.id) newActiveId = serverId;
+					return { ...r, id: serverId };
+				});
+				if (newActiveId) setActiveRecordId(newActiveId);
+			}
+		} catch {
+			showToast(lang === "zh" ? "⚠️ 登录状态已失效，请重新登录" : "⚠️ Your session has expired, please log in again");
+			await logout();
+			setIsLoggedIn(false);
+			return;
 		}
 
 		try {
