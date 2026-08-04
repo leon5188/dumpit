@@ -42,8 +42,8 @@ export async function completeLoginLinkIfPresent(): Promise<boolean> {
 	const credential = await signInWithEmailLink(firebaseAuth, email, window.location.href);
 	const idToken = await credential.user.getIdToken();
 
-	const decoded = await postJson("/api/auth/verify", { id_token: idToken }, "登录验证失败");
-	localStorage.setItem(SESSION_TOKEN_KEY, decoded.session_token as string);
+	const decoded = (await postJson("/api/auth/verify", { id_token: idToken }, "登录验证失败")) as { session_token: string };
+	localStorage.setItem(SESSION_TOKEN_KEY, decoded.session_token);
 	localStorage.removeItem(PENDING_EMAIL_KEY);
 
 	window.history.replaceState({}, "", window.location.pathname);

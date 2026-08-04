@@ -73,6 +73,9 @@ export default function MindWeb({ summary, keyInsights, actionItems, title }: Mi
 				}
 			}
 			
+			// Seeds the draggable graph from props; nodes are then mutated in place
+			// by drag handlers below, not re-derived on every render.
+			// eslint-disable-next-line react-hooks/set-state-in-effect
 			setNodes(newNodes);
 			setEdges(newEdges);
 		} else {

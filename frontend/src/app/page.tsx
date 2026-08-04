@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
+import Image from "next/image";
 import Link from "next/link";
 import styles from "./page.module.css";
 
@@ -12,7 +13,7 @@ export default function LandingPage() {
 			{/* 🪐 顶部导航栏 */}
 			<header className={styles.header}>
 				<div className={styles.logoContainer}>
-					<img src="/logo.jpg" alt="BrainVent. Logo" className={styles.logoImg} />
+					<Image src="/logo.jpg" alt="BrainVent. Logo" width={30} height={30} className={styles.logoImg} />
 					<span className={styles.logoText}>BrainVent.</span>
 				</div>
 				<nav className={styles.nav}>
@@ -86,7 +87,7 @@ export default function LandingPage() {
 							<div className={styles.demoBox}>
 								<div className={styles.demoHeader}>🎤 YOUR VOICE (MESSY & DUMPED)</div>
 								<div className={styles.demoTextRaw}>
-									"So, uh, we need to like... design a new logo by Friday... and oh, don't forget to email Sarah about the pricing update."
+									&quot;So, uh, we need to like... design a new logo by Friday... and oh, don&apos;t forget to email Sarah about the pricing update.&quot;
 								</div>
 							</div>
 							<div className={styles.demoArrow}>⬇️</div>
@@ -118,7 +119,7 @@ export default function LandingPage() {
 						<div className={styles.featureIcon}>🎤</div>
 						<h3 className={styles.featureTitle}>Zero-Barrier Voice Capture</h3>
 						<p className={styles.featureDesc}>
-							Skip blank-page procrastination. Open the mic, talk naturally with stutters. AI auto-removes filler words ("ums", "likes") and instantly structures your stream of consciousness.
+							Skip blank-page procrastination. Open the mic, talk naturally with stutters. AI auto-removes filler words (&quot;ums&quot;, &quot;likes&quot;) and instantly structures your stream of consciousness.
 						</p>
 					</div>
 					<div className={styles.featureCard}>

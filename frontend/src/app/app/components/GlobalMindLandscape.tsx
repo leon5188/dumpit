@@ -172,6 +172,9 @@ export default function GlobalMindLandscape({ historyList, isZh, onClose }: Glob
 			}
 		}
 
+		// Seeds the physics simulation from historyList; nodes/edges are then
+		// mutated in place by the force-layout animation loop below, not re-derived.
+		// eslint-disable-next-line react-hooks/set-state-in-effect
 		setNodes(tempNodes);
 		setEdges(tempEdges);
 	}, [historyList]);

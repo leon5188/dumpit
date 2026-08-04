@@ -21,13 +21,13 @@ export function getBackendUrl(path: string): string {
 	return `${protocol}//${hostname}:8080${path}`;
 }
 
-async function parseJsonOrThrow(res: Response, defaultErrorMsg: string): Promise<any> {
+async function parseJsonOrThrow(res: Response, defaultErrorMsg: string): Promise<unknown> {
 	const decoded = await res.json();
 	if (res.ok) return decoded;
 	throw new Error(decoded.error || defaultErrorMsg);
 }
 
-export async function postJson(path: string, body: unknown, defaultErrorMsg: string): Promise<any> {
+export async function postJson(path: string, body: unknown, defaultErrorMsg: string): Promise<unknown> {
 	const res = await fetch(getBackendUrl(path), {
 		method: "POST",
 		headers: { "Content-Type": "application/json" },
@@ -41,7 +41,7 @@ export async function postJsonAuthed(
 	body: unknown,
 	sessionToken: string,
 	defaultErrorMsg: string
-): Promise<any> {
+): Promise<unknown> {
 	const res = await fetch(getBackendUrl(path), {
 		method: "POST",
 		headers: {
@@ -53,7 +53,7 @@ export async function postJsonAuthed(
 	return parseJsonOrThrow(res, defaultErrorMsg);
 }
 
-export async function getJsonAuthed(path: string, sessionToken: string, defaultErrorMsg: string): Promise<any> {
+export async function getJsonAuthed(path: string, sessionToken: string, defaultErrorMsg: string): Promise<unknown> {
 	const res = await fetch(getBackendUrl(path), {
 		headers: { Authorization: `Bearer ${sessionToken}` },
 	});

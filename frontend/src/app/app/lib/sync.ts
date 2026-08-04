@@ -1,10 +1,38 @@
 import { getSessionToken } from "./auth";
-import { postJson, postJsonAuthed, getJsonAuthed } from "./api";
+import { postJsonAuthed, getJsonAuthed } from "./api";
 import { HistoryRecord } from "./types";
+import { CalendarEvent } from "../locales";
 
 export interface ImportResult {
 	failedIds: string[];
 	idMapping: Record<string, string>;
+}
+
+interface ImportResponse {
+	failed?: string[];
+	imported?: { client_id: string; server_id: string }[];
+}
+
+interface BackendHistoryRecord {
+	id: string;
+	created_at?: string;
+	raw_text?: string;
+	summary?: {
+		summary?: string;
+		action_items?: string[];
+		key_insights?: string[];
+		calendar_events?: CalendarEvent[];
+	};
+	archived?: boolean;
+}
+
+interface HistoryListResponse {
+	records?: BackendHistoryRecord[];
+}
+
+interface SubscriptionResponse {
+	subscribed?: boolean;
+	expires_at?: string | null;
 }
 
 function toBackendSummary(record: HistoryRecord) {
@@ -27,12 +55,12 @@ export async function importLocalHistory(records: HistoryRecord[]): Promise<Impo
 		raw_text: r.rawText,
 	}));
 
-	const decoded = await postJsonAuthed(
+	const decoded = (await postJsonAuthed(
 		"/api/history/import",
 		{ records: payload },
 		sessionToken,
 		"历史记录导入失败"
-	);
+	)) as ImportResponse;
 
 	const failedIds: string[] = decoded.failed || [];
 	const idMapping: Record<string, string> = {};
@@ -63,13 +91,13 @@ export async function pullAllHistory(): Promise<HistoryRecord[]> {
 	const sessionToken = getSessionToken();
 	if (!sessionToken) return [];
 
-	const decoded = await getJsonAuthed("/api/history", sessionToken, "拉取历史记录失败");
-	const rawRecords: any[] = decoded.records || [];
+	const decoded = (await getJsonAuthed("/api/history", sessionToken, "拉取历史记录失败")) as HistoryListResponse;
+	const rawRecords = decoded.records || [];
 
 	return rawRecords.map((r) => ({
-		id: r.id as string,
-		timestamp: ((r.created_at as string) || "").replace("T", " "),
-		rawText: (r.raw_text as string) || "",
+		id: r.id,
+		timestamp: (r.created_at || "").replace("T", " "),
+		rawText: r.raw_text || "",
 		summary: r.summary?.summary || "",
 		actionItems: r.summary?.action_items || [],
 		keyInsights: r.summary?.key_insights || [],
@@ -84,9 +112,9 @@ export async function fetchSubscription(): Promise<boolean> {
 	const sessionToken = getSessionToken();
 	if (!sessionToken) return false;
 	try {
-		const decoded = await getJsonAuthed("/api/subscription", sessionToken, "拉取订阅状态失败");
+		const decoded = (await getJsonAuthed("/api/subscription", sessionToken, "拉取订阅状态失败")) as SubscriptionResponse;
 		if (decoded.subscribed !== true) return false;
-		const expiresAt = decoded.expires_at as string | null;
+		const expiresAt = decoded.expires_at;
 		return !expiresAt || new Date(expiresAt) > new Date();
 	} catch {
 		return false;

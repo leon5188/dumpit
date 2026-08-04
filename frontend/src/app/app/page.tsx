@@ -1,7 +1,8 @@
 "use client";
 
 import React, { useState, useEffect, useRef } from "react";
-import { translations, CalendarEvent, ToolLink } from "./locales";
+import Image from "next/image";
+import { translations, CalendarEvent } from "./locales";
 import MindWeb from "./components/MindWeb";
 import TodoManager from "./components/TodoManager";
 import TimelineView from "./components/TimelineView";
@@ -13,7 +14,11 @@ import { importLocalHistory, pushRecord, pullAllHistory, fetchSubscription } fro
 
 export default function Home() {
 	// 多语言控制
-	const [lang, setLang] = useState<"zh" | "en">("zh");
+	const [lang, setLang] = useState<"zh" | "en">(() => {
+		if (typeof window === "undefined") return "zh";
+		const savedLang = localStorage.getItem("dumpit_lang");
+		return savedLang === "zh" || savedLang === "en" ? savedLang : "zh";
+	});
 	const t = translations[lang];
 
 	// 侧边栏文件夹切换
@@ -24,16 +29,16 @@ export default function Home() {
 	const [recordingTime, setRecordingTime] = useState(0);
 	const [status, setStatus] = useState<"idle" | "recording" | "uploading" | "done" | "error">("idle");
 	const [errorMessage, setErrorMessage] = useState("");
-	const [isOnline, setIsOnline] = useState(true);
+	const [isOnline, setIsOnline] = useState(() => (typeof navigator === "undefined" ? true : navigator.onLine));
 
 	// 输入配置
-	const [userToneSample, setUserToneSample] = useState("");
+	const [userToneSample, setUserToneSample] = useState(() => (typeof window === "undefined" ? "" : localStorage.getItem("dumpit_user_tone") || ""));
 	const [customPrompt, setCustomPrompt] = useState("");
-	const [notionToken, setNotionToken] = useState("");
-	const [notionPageId, setNotionPageId] = useState("");
+	const [notionToken, setNotionToken] = useState(() => (typeof window === "undefined" ? "" : localStorage.getItem("dumpit_notion_token") || ""));
+	const [notionPageId, setNotionPageId] = useState(() => (typeof window === "undefined" ? "" : localStorage.getItem("dumpit_notion_page_id") || ""));
 	const [isLoggedIn, setIsLoggedIn] = useState(false);
 	const [loginEmail, setLoginEmail] = useState("");
-	const [customBackendUrl, setCustomBackendUrl] = useState("");
+	const [customBackendUrl, setCustomBackendUrl] = useState(() => (typeof window === "undefined" ? "" : localStorage.getItem("dumpit_backend_url") || ""));
 	const [isPremium, setIsPremium] = useState(false);
 	const [showConfig, setShowConfig] = useState(false);
 	const [showGuide, setShowGuide] = useState(true);
@@ -46,7 +51,17 @@ export default function Home() {
 	const [calendarEvents, setCalendarEvents] = useState<CalendarEvent[]>([]);
 
 	// 历史记录
-	const [historyList, setHistoryList] = useState<HistoryRecord[]>([]);
+	const [historyList, setHistoryList] = useState<HistoryRecord[]>(() => {
+		if (typeof window === "undefined") return [];
+		const savedHistory = localStorage.getItem("dumpit_history");
+		if (!savedHistory) return [];
+		try {
+			return JSON.parse(savedHistory);
+		} catch (e) {
+			console.error("Failed to parse history", e);
+			return [];
+		}
+	});
 	const [activeRecordId, setActiveRecordId] = useState<string | null>(null);
 
 	// 提示消息
@@ -67,37 +82,11 @@ export default function Home() {
 	// 1. 初始化
 	useEffect(() => {
 		if (typeof window !== "undefined") {
-			setIsOnline(navigator.onLine);
-
 			const handleOnlineStatus = () => setIsOnline(true);
 			const handleOfflineStatus = () => setIsOnline(false);
 
 			window.addEventListener("online", handleOnlineStatus);
 			window.addEventListener("offline", handleOfflineStatus);
-
-			const savedLang = localStorage.getItem("dumpit_lang");
-			if (savedLang === "zh" || savedLang === "en") setLang(savedLang);
-
-			const savedTone = localStorage.getItem("dumpit_user_tone");
-			if (savedTone) setUserToneSample(savedTone);
-
-			const savedNotionToken = localStorage.getItem("dumpit_notion_token");
-			if (savedNotionToken) setNotionToken(savedNotionToken);
-
-			const savedNotionPage = localStorage.getItem("dumpit_notion_page_id");
-			if (savedNotionPage) setNotionPageId(savedNotionPage);
-
-			const savedBackendUrl = localStorage.getItem("dumpit_backend_url");
-			if (savedBackendUrl) setCustomBackendUrl(savedBackendUrl);
-
-			const savedHistory = localStorage.getItem("dumpit_history");
-			if (savedHistory) {
-				try {
-					setHistoryList(JSON.parse(savedHistory));
-				} catch (e) {
-					console.error("Failed to parse history", e);
-				}
-			}
 
 			return () => {
 				window.removeEventListener("online", handleOnlineStatus);
@@ -111,6 +100,11 @@ export default function Home() {
 		const nextLang = lang === "zh" ? "en" : "zh";
 		setLang(nextLang);
 		localStorage.setItem("dumpit_lang", nextLang);
+	};
+
+	const showToast = (msg: string) => {
+		setToastMessage(msg);
+		setTimeout(() => setToastMessage(""), 3000);
 	};
 
 	// Base64 转 Blob 辅助函数 (离线同步)
@@ -174,25 +168,14 @@ export default function Home() {
 			timerRef.current = setInterval(() => {
 				setRecordingTime((prev) => prev + 1);
 			}, 1000);
-		} else {
-			if (timerRef.current) {
-				clearInterval(timerRef.current);
-				timerRef.current = null;
-			}
-			setRecordingTime(0);
+		} else if (timerRef.current) {
+			clearInterval(timerRef.current);
+			timerRef.current = null;
 		}
 		return () => {
 			if (timerRef.current) clearInterval(timerRef.current);
 		};
 	}, [isRecording]);
-
-	// 5. 离线暂存自动同步
-	useEffect(() => {
-		if (isOnline && historyList.some(r => r.status === "offline_pending")) {
-			showToast(t.toastOfflineSync);
-			syncOfflineRecords();
-		}
-	}, [isOnline, historyList]);
 
 	// 6. 录制开始与停止
 	const startRecording = async () => {
@@ -230,7 +213,7 @@ export default function Home() {
 			setIsRecording(true);
 			setStatus("recording");
 			setErrorMessage("");
-		} catch (err: any) {
+		} catch (err) {
 			console.error("Mic error", err);
 			let errMsg = lang === "zh" ? "无法访问麦克风，请检查浏览器权限！" : "Failed to access mic, check settings!";
 			if (!navigator.mediaDevices) {
@@ -247,6 +230,7 @@ export default function Home() {
 		if (mediaRecorderRef.current && isRecording) {
 			mediaRecorderRef.current.stop();
 			setIsRecording(false);
+			setRecordingTime(0);
 		}
 	};
 
@@ -337,6 +321,17 @@ export default function Home() {
 		}
 	};
 
+	// 5. 离线暂存自动同步
+	useEffect(() => {
+		if (isOnline && historyList.some(r => r.status === "offline_pending")) {
+			// Reacting to reconnect (external event), not deriving render state — safe to notify here.
+			// eslint-disable-next-line react-hooks/set-state-in-effect
+			showToast(t.toastOfflineSync);
+			syncOfflineRecords();
+		}
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, [isOnline, historyList]);
+
 	// 9. 在线音频提交
 	const uploadAndProcess = async (audioBlob: Blob) => {
 		setStatus("uploading");
@@ -387,12 +382,13 @@ export default function Home() {
 
 			setStatus("done");
 			showToast(t.toastSuccess);
-		} catch (err: any) {
+		} catch (err) {
 			console.error("Processing failed", err);
 			const targetUrl = getBackendUrl("/api/process-audio");
+			const message = err instanceof Error ? err.message : String(err);
 			setErrorMessage(lang === "zh"
-				? `⚠️ 语音处理连接失败 (${err.message})。请检查您的后端服务器是否正常运行在 ${targetUrl} 并已开启跨域(CORS)！`
-				: `⚠️ Connect failed (${err.message}). Check if your backend runs at ${targetUrl} with CORS enabled!`);
+				? `⚠️ 语音处理连接失败 (${message})。请检查您的后端服务器是否正常运行在 ${targetUrl} 并已开启跨域(CORS)！`
+				: `⚠️ Connect failed (${message}). Check if your backend runs at ${targetUrl} with CORS enabled!`);
 			setStatus("error");
 		}
 	};
@@ -540,11 +536,6 @@ ${calendarEvents.map(event => `- **${event.title}** (${event.time})`).join("\n")
 		return `${mins.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}`;
 	};
 
-	const showToast = (msg: string) => {
-		setToastMessage(msg);
-		setTimeout(() => setToastMessage(""), 3000);
-	};
-
 	// 账号同步：导入本地记录、拉取云端记录合并、恢复订阅状态。
 	// 直接读 localStorage 里的 dumpit_history 而不是读 historyList state——
 	// 这个函数在挂载时的 effect 里调用，此时 historyList state 可能还没被
@@ -608,8 +599,9 @@ ${calendarEvents.map(event => `- **${event.title}** (${event.time})`).join("\n")
 					await runAccountSync();
 					return;
 				}
-			} catch (err: any) {
-				showToast(err.message || (lang === "zh" ? "⚠️ 登录链接无效或已过期" : "⚠️ Invalid or expired login link"));
+			} catch (err) {
+				const message = err instanceof Error ? err.message : undefined;
+				showToast(message || (lang === "zh" ? "⚠️ 登录链接无效或已过期" : "⚠️ Invalid or expired login link"));
 				return;
 			}
 			if (hasSessionToken()) {
@@ -629,8 +621,9 @@ ${calendarEvents.map(event => `- **${event.title}** (${event.time})`).join("\n")
 		try {
 			await sendLoginLink(loginEmail);
 			showToast(lang === "zh" ? "📧 登录链接已发送，请查收邮箱" : "📧 Login link sent, check your email");
-		} catch (err: any) {
-			showToast(lang === "zh" ? `⚠️ 发送失败: ${err.message}` : `⚠️ Failed to send: ${err.message}`);
+		} catch (err) {
+			const message = err instanceof Error ? err.message : String(err);
+			showToast(lang === "zh" ? `⚠️ 发送失败: ${message}` : `⚠️ Failed to send: ${message}`);
 		}
 	};
 
@@ -649,7 +642,7 @@ ${calendarEvents.map(event => `- **${event.title}** (${event.time})`).join("\n")
 			<aside className="sidebar">
 				<div className="logo-container" style={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: "4px" }}>
 					<div style={{ display: "flex", alignItems: "center" }}>
-						<img src="/logo.jpg" alt="BrainVent" style={{ width: "30px", height: "30px", borderRadius: "8px", border: "1.5px solid #8B5CF6", marginRight: "6px" }} />
+						<Image src="/logo.jpg" alt="BrainVent" width={30} height={30} style={{ borderRadius: "8px", border: "1.5px solid #8B5CF6", marginRight: "6px" }} />
 						<div className="logo-text">
 							BrainVent<span className="logo-dot">.</span>
 						</div>
