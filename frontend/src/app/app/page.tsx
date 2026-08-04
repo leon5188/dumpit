@@ -8,6 +8,8 @@ import TimelineView from "./components/TimelineView";
 import GlobalMindLandscape from "./components/GlobalMindLandscape";
 import { getBackendUrl } from "./lib/api";
 import { HistoryRecord } from "./lib/types";
+import { sendLoginLink, completeLoginLinkIfPresent, logout, hasSessionToken } from "./lib/auth";
+import { importLocalHistory, pushRecord, pullAllHistory, fetchSubscription } from "./lib/sync";
 
 export default function Home() {
 	// 多语言控制
@@ -29,7 +31,8 @@ export default function Home() {
 	const [customPrompt, setCustomPrompt] = useState("");
 	const [notionToken, setNotionToken] = useState("");
 	const [notionPageId, setNotionPageId] = useState("");
-	const [licenseKey, setLicenseKey] = useState("");
+	const [isLoggedIn, setIsLoggedIn] = useState(false);
+	const [loginEmail, setLoginEmail] = useState("");
 	const [customBackendUrl, setCustomBackendUrl] = useState("");
 	const [isPremium, setIsPremium] = useState(false);
 	const [showConfig, setShowConfig] = useState(false);
@@ -84,14 +87,8 @@ export default function Home() {
 			const savedNotionPage = localStorage.getItem("dumpit_notion_page_id");
 			if (savedNotionPage) setNotionPageId(savedNotionPage);
 
-			const savedLicenseKey = localStorage.getItem("dumpit_license_key");
-			if (savedLicenseKey) setLicenseKey(savedLicenseKey);
-
 			const savedBackendUrl = localStorage.getItem("dumpit_backend_url");
 			if (savedBackendUrl) setCustomBackendUrl(savedBackendUrl);
-
-			const savedIsPremium = localStorage.getItem("dumpit_is_premium");
-			if (savedIsPremium === "true") setIsPremium(true);
 
 			const savedHistory = localStorage.getItem("dumpit_history");
 			if (savedHistory) {
@@ -130,7 +127,7 @@ export default function Home() {
 	// ⚡ 向 Go 后端发起同步到 Notion 的请求
 	const syncToNotion = async () => {
 		if (!isPremium) {
-			alert(lang === "zh" ? "🔒 提示: 一键同步到 Notion 是黄金会员专属特权！请在下方偏好配置中填写激活码激活授权。" : "🔒 Notice: Notion 1-Click Sync is a Premium privilege! Please activate your license key in settings.");
+			alert(lang === "zh" ? "🔒 提示: 一键同步到 Notion 是黄金会员专属特权！请先登录账号解锁。" : "🔒 Notice: Notion 1-Click Sync is a Premium privilege! Please log in to unlock.");
 			return;
 		}
 
@@ -168,41 +165,6 @@ export default function Home() {
 			}
 		} catch (err) {
 			alert(lang === "zh" ? `⚠️ 网络错误: ${err}` : `⚠️ Network error: ${err}`);
-		}
-	};
-
-	// 🔒 调用后端核销激活码
-	const verifyLicense = async () => {
-		if (!licenseKey) {
-			alert(lang === "zh" ? "⚠️ 请先输入激活码" : "⚠️ Please input license key first");
-			return;
-		}
-
-		alert(lang === "zh" ? "正在连接支付中心校验激活码..." : "Verifying license key with payment center...");
-
-		try {
-			const res = await fetch(getBackendUrl("/api/license/verify"), {
-				method: "POST",
-				headers: {
-					"Content-Type": "application/json",
-				},
-				body: JSON.stringify({
-					license_key: licenseKey,
-					instance_name: "BrainVent Web App Client"
-				}),
-			});
-
-			const data = await res.json();
-			if (res.ok && data.success) {
-				setIsPremium(true);
-				localStorage.setItem("dumpit_is_premium", "true");
-				localStorage.setItem("dumpit_license_key", licenseKey);
-				alert(lang === "zh" ? "🎉 激活成功！欢迎成为 BrainVent. 黄金会员！" : "🎉 Activated successfully! Welcome to BrainVent. Premium!");
-			} else {
-				alert(lang === "zh" ? `⚠️ 激活失败: ${data.error}` : `⚠️ Activation failed: ${data.error}`);
-			}
-		} catch (err) {
-			alert(lang === "zh" ? `⚠️ 激活网络错误: ${err}` : `⚠️ Network error during activation: ${err}`);
 		}
 	};
 
@@ -421,6 +383,7 @@ export default function Home() {
 			setHistoryList(updatedHistory);
 			localStorage.setItem("dumpit_history", JSON.stringify(updatedHistory));
 			setActiveRecordId(newRecord.id);
+			void pushRecord(newRecord);
 
 			setStatus("done");
 			showToast(t.toastSuccess);
@@ -580,6 +543,90 @@ ${calendarEvents.map(event => `- **${event.title}** (${event.time})`).join("\n")
 	const showToast = (msg: string) => {
 		setToastMessage(msg);
 		setTimeout(() => setToastMessage(""), 3000);
+	};
+
+	// 账号同步：导入本地记录、拉取云端记录合并、恢复订阅状态。
+	// 直接读 localStorage 里的 dumpit_history 而不是读 historyList state——
+	// 这个函数在挂载时的 effect 里调用，此时 historyList state 可能还没被
+	// 另一个 init effect 从 localStorage 加载完，读 state 会拿到过时的空数组。
+	const runAccountSync = async () => {
+		const raw = localStorage.getItem("dumpit_history");
+		const localRecords: HistoryRecord[] = raw ? JSON.parse(raw) : [];
+
+		const importResult = await importLocalHistory(localRecords);
+		if (importResult.failedIds.length > 0) {
+			showToast(
+				lang === "zh"
+					? `${importResult.failedIds.length} 条记录导入失败，已跳过`
+					: `${importResult.failedIds.length} records failed to import`
+			);
+		}
+
+		let mergedHistory = localRecords;
+		if (Object.keys(importResult.idMapping).length > 0) {
+			let newActiveId: string | null = null;
+			mergedHistory = localRecords.map((r) => {
+				const serverId = importResult.idMapping[r.id];
+				if (!serverId) return r;
+				if (activeRecordId === r.id) newActiveId = serverId;
+				return { ...r, id: serverId };
+			});
+			if (newActiveId) setActiveRecordId(newActiveId);
+		}
+
+		try {
+			const cloudRecords = await pullAllHistory();
+			const localIds = new Set(mergedHistory.map((r) => r.id));
+			const newFromCloud = cloudRecords.filter((r) => !localIds.has(r.id));
+			mergedHistory = [...newFromCloud, ...mergedHistory];
+			showToast(lang === "zh" ? "云同步完成" : "Cloud sync complete");
+		} catch {
+			showToast(lang === "zh" ? "拉取云端记录失败，稍后重试" : "Failed to pull cloud records, will retry later");
+		}
+
+		setHistoryList(mergedHistory);
+		localStorage.setItem("dumpit_history", JSON.stringify(mergedHistory));
+
+		const premium = await fetchSubscription();
+		if (premium) setIsPremium(true); // 只做恢复，不吊销本地已有的会员状态
+	};
+
+	// 挂载时检测邮件登录链接回跳；命中或本来就已登录都会触发一次账号同步
+	useEffect(() => {
+		(async () => {
+			try {
+				const justLoggedIn = await completeLoginLinkIfPresent();
+				if (justLoggedIn) setIsLoggedIn(true);
+			} catch (err: any) {
+				showToast(err.message || (lang === "zh" ? "⚠️ 登录链接无效或已过期" : "⚠️ Invalid or expired login link"));
+				return;
+			}
+			if (hasSessionToken()) {
+				setIsLoggedIn(true);
+				await runAccountSync();
+			}
+		})();
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, []);
+
+	const handleSendLoginLink = async () => {
+		if (!loginEmail) {
+			showToast(lang === "zh" ? "⚠️ 请先输入邮箱" : "⚠️ Please enter your email first");
+			return;
+		}
+		try {
+			await sendLoginLink(loginEmail);
+			showToast(lang === "zh" ? "📧 登录链接已发送，请查收邮箱" : "📧 Login link sent, check your email");
+		} catch (err: any) {
+			showToast(lang === "zh" ? `⚠️ 发送失败: ${err.message}` : `⚠️ Failed to send: ${err.message}`);
+		}
+	};
+
+	const handleLogout = async () => {
+		await logout();
+		setIsLoggedIn(false);
+		setIsPremium(false);
+		showToast(lang === "zh" ? "已登出" : "Logged out");
 	};
 
 	const filteredHistory = historyList.filter(record => (record.folder || "inbox") === sidebarFolder);
@@ -820,24 +867,40 @@ ${calendarEvents.map(event => `- **${event.title}** (${event.time})`).join("\n")
 									/>
 								</div>
 								<div className="input-group" style={{ marginTop: "10px" }}>
-									<label htmlFor="license-key" style={{ color: "#FBBF24", fontWeight: "bold" }}>{lang === "zh" ? "🔑 BrainVent. 黄金会员激活码 (License Key)" : "🔑 BrainVent. Premium License Key"}</label>
-									<div style={{ display: "flex", gap: "8px", marginTop: "4px" }}>
-										<input
-											id="license-key"
-											type="password"
-											className="input-field"
-											placeholder="e.g. LSQ-..."
-											value={licenseKey}
-											onChange={(e) => setLicenseKey(e.target.value)}
-											style={{ flex: 1, background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.08)", color: "#fff", padding: "0.5rem", borderRadius: "8px", outline: "none", fontSize: "12px" }}
-										/>
-										<button 
-											onClick={verifyLicense}
-											style={{ background: "linear-gradient(90deg, #FBBF24 0%, #F59E0B 100%)", color: "#000", border: "none", borderRadius: "8px", padding: "0 1rem", fontSize: "12px", fontWeight: "bold", cursor: "pointer" }}
-										>
-											{lang === "zh" ? "激活" : "Activate"}
-										</button>
-									</div>
+									<label style={{ color: "#FBBF24", fontWeight: "bold" }}>
+										{lang === "zh" ? "🔑 账号与云同步" : "🔑 Account & Cloud Sync"}
+									</label>
+									{isLoggedIn ? (
+										<div style={{ display: "flex", alignItems: "center", gap: "8px", marginTop: "4px" }}>
+											<span style={{ color: "#10B981", fontSize: "12px" }}>
+												{lang === "zh" ? "已登录，历史记录与订阅状态已绑定账号" : "Logged in — history and subscription are account-bound"}
+											</span>
+											<button
+												onClick={handleLogout}
+												style={{ background: "rgba(255,255,255,0.08)", color: "#fff", border: "none", borderRadius: "8px", padding: "0 1rem", fontSize: "12px", fontWeight: "bold", cursor: "pointer" }}
+											>
+												{lang === "zh" ? "登出" : "Log Out"}
+											</button>
+										</div>
+									) : (
+										<div style={{ display: "flex", gap: "8px", marginTop: "4px" }}>
+											<input
+												id="login-email"
+												type="email"
+												className="input-field"
+												placeholder="you@example.com"
+												value={loginEmail}
+												onChange={(e) => setLoginEmail(e.target.value)}
+												style={{ flex: 1, background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.08)", color: "#fff", padding: "0.5rem", borderRadius: "8px", outline: "none", fontSize: "12px" }}
+											/>
+											<button
+												onClick={handleSendLoginLink}
+												style={{ background: "linear-gradient(90deg, #FBBF24 0%, #F59E0B 100%)", color: "#000", border: "none", borderRadius: "8px", padding: "0 1rem", fontSize: "12px", fontWeight: "bold", cursor: "pointer" }}
+											>
+												{lang === "zh" ? "发送登录链接" : "Send Link"}
+											</button>
+										</div>
+									)}
 								</div>
 							</div>
 						)}
