@@ -30,12 +30,12 @@ func VerifyAuthHandler(c echo.Context) error {
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "FIREBASE_PROJECT_ID is not configured"})
 	}
 
-	uid, phoneNumber, err := services.VerifyFirebaseIDToken(req.IDToken, projectID)
+	uid, phoneNumber, email, err := services.VerifyFirebaseIDToken(req.IDToken, projectID)
 	if err != nil {
 		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "invalid firebase id token: " + err.Error()})
 	}
 
-	if err := db.UpsertUser(c.Request().Context(), uid, phoneNumber); err != nil {
+	if err := db.UpsertUser(c.Request().Context(), uid, phoneNumber, email); err != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "failed to create/update user: " + err.Error()})
 	}
 
