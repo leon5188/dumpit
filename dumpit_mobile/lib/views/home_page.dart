@@ -48,6 +48,7 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
   String? _localAudioPath;
   double _currentAmplitude = 0.0;
   StreamSubscription<Amplitude>? _amplitudeSubscription;
+  StreamSubscription<String>? _launchUrlSubscription;
 
   // 状态与指令
   String _status = 'idle'; // 'idle', 'recording', 'uploading', 'done', 'error'
@@ -143,6 +144,9 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
         _handleLaunchUrl(url);
       }
     });
+
+    // App 已在前台/后台运行时被 Action Button 再次唤起（热启动）
+    _launchUrlSubscription = DeviceSyncService.onLaunchUrl.listen(_handleLaunchUrl);
   }
 
   // 处理外部 Scheme 唤醒
@@ -162,6 +166,7 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
   @override
   void dispose() {
     IapService.instance.dispose();
+    _launchUrlSubscription?.cancel();
     _audioRecorder.dispose();
     _amplitudeSubscription?.cancel();
     _timer?.cancel();

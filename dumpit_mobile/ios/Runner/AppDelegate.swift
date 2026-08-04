@@ -65,6 +65,7 @@ class BinauralPlayer {
   private var eventStore: EKEventStore?
   private var launchUrl: String?
   private let focusPlayer = BinauralPlayer()
+  private var syncChannel: FlutterMethodChannel?
 
   override func application(
     _ application: UIApplication,
@@ -79,7 +80,8 @@ class BinauralPlayer {
     options: [UIApplication.OpenURLOptionsKey : Any] = [:]
   ) -> Bool {
     self.launchUrl = url.absoluteString
-    NotificationCenter.default.post(name: Notification.Name("BrainVentLaunchUrlNotification"), object: url.absoluteString)
+    // Flutter 引擎已在运行（热启动/前台唤起）时，直接推给 Dart 侧；冷启动则由 getLaunchUrl 拉取
+    syncChannel?.invokeMethod("onLaunchUrl", arguments: url.absoluteString)
     return super.application(app, open: url, options: options)
   }
 
@@ -137,7 +139,8 @@ class BinauralPlayer {
     
     let syncChannel = FlutterMethodChannel(name: "com.brainvent.app/device_sync",
                                               binaryMessenger: engineBridge.applicationRegistrar.messenger())
-    
+    self.syncChannel = syncChannel
+
     syncChannel.setMethodCallHandler({
       [weak self] (call: FlutterMethodCall, result: @escaping FlutterResult) -> Void in
       guard let self = self else { return }
