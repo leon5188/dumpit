@@ -596,14 +596,19 @@ ${calendarEvents.map(event => `- **${event.title}** (${event.time})`).join("\n")
 		(async () => {
 			try {
 				const justLoggedIn = await completeLoginLinkIfPresent();
-				if (justLoggedIn) setIsLoggedIn(true);
+				if (justLoggedIn) {
+					setIsLoggedIn(true);
+					await runAccountSync();
+					return;
+				}
 			} catch (err: any) {
 				showToast(err.message || (lang === "zh" ? "⚠️ 登录链接无效或已过期" : "⚠️ Invalid or expired login link"));
 				return;
 			}
 			if (hasSessionToken()) {
 				setIsLoggedIn(true);
-				await runAccountSync();
+				const premium = await fetchSubscription();
+				if (premium) setIsPremium(true);
 			}
 		})();
 		// eslint-disable-next-line react-hooks/exhaustive-deps
