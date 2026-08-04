@@ -22,7 +22,7 @@ func TestUpsertSubscription_UpdatesNotDuplicates(t *testing.T) {
 	}
 
 	uid := "test-uid-subscription-upsert"
-	if err := UpsertUser(ctx, uid, "+10000000000"); err != nil {
+	if err := UpsertUser(ctx, uid, "+10000000000", ""); err != nil {
 		t.Fatalf("UpsertUser failed: %v", err)
 	}
 

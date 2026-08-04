@@ -22,7 +22,7 @@ func TestRecentSummaries_EmptyAndPartial(t *testing.T) {
 	}
 
 	uid := "test-uid-recent-summaries"
-	if err := UpsertUser(ctx, uid, "+10000000001"); err != nil {
+	if err := UpsertUser(ctx, uid, "+10000000001", ""); err != nil {
 		t.Fatalf("UpsertUser failed: %v", err)
 	}
 
