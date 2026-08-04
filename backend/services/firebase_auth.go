@@ -18,6 +18,7 @@ const googlePublicKeysURL = "https://www.googleapis.com/robot/v1/metadata/x509/s
 // FirebaseClaims 是 Firebase 手机号登录 ID Token 里我们关心的字段
 type FirebaseClaims struct {
 	PhoneNumber string `json:"phone_number"`
+	Email       string `json:"email"`
 	jwt.RegisteredClaims
 }
 
@@ -72,7 +73,7 @@ func (c *firebaseKeyCache) getKeys() (map[string]*rsa.PublicKey, error) {
 }
 
 // VerifyFirebaseIDToken 校验 Firebase 手机号登录签发的 ID Token，返回 uid 和手机号
-func VerifyFirebaseIDToken(idToken string, projectID string) (uid string, phoneNumber string, err error) {
+func VerifyFirebaseIDToken(idToken string, projectID string) (uid string, phoneNumber string, email string, err error) {
 	claims := &FirebaseClaims{}
 	token, err := jwt.ParseWithClaims(idToken, claims, func(t *jwt.Token) (interface{}, error) {
 		kid, ok := t.Header["kid"].(string)
@@ -94,11 +95,11 @@ func VerifyFirebaseIDToken(idToken string, projectID string) (uid string, phoneN
 		jwt.WithIssuer("https://securetoken.google.com/"+projectID),
 	)
 	if err != nil {
-		return "", "", fmt.Errorf("invalid firebase id token: %w", err)
+		return "", "", "", fmt.Errorf("invalid firebase id token: %w", err)
 	}
 	if !token.Valid || claims.Subject == "" {
-		return "", "", errors.New("firebase id token missing subject (uid)")
+		return "", "", "", errors.New("firebase id token missing subject (uid)")
 	}
 
-	return claims.Subject, claims.PhoneNumber, nil
+	return claims.Subject, claims.PhoneNumber, claims.Email, nil
 }
