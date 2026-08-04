@@ -215,6 +215,28 @@ body {
   overflow: hidden;
 }
 
+.recorder-card.sucking {
+  animation: suck-in 0.3s ease-in;
+}
+
+@keyframes suck-in {
+  0% {
+    transform: scale(1);
+    filter: blur(0);
+    opacity: 1;
+  }
+  60% {
+    transform: scale(0.94);
+    filter: blur(4px);
+    opacity: 0.7;
+  }
+  100% {
+    transform: scale(1);
+    filter: blur(0);
+    opacity: 1;
+  }
+}
+
 .recorder-card::before {
   content: '';
   position: absolute;

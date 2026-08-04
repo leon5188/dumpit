@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
+import { playChimeSound } from "../lib/sound";
 
 interface TodoManagerProps {
 	actionItems: string[];
@@ -49,10 +50,14 @@ export default function TodoManager({
 	};
 
 	const toggleTodo = (index: number) => {
-		setCheckedItems((prev) => ({
-			...prev,
-			[index]: !prev[index],
-		}));
+		setCheckedItems((prev) => {
+			const nowChecked = !prev[index];
+			if (nowChecked) {
+				playChimeSound();
+				if (typeof navigator !== "undefined" && "vibrate" in navigator) navigator.vibrate(20);
+			}
+			return { ...prev, [index]: nowChecked };
+		});
 	};
 
 	return (

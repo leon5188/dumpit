@@ -11,6 +11,7 @@ import { getBackendUrl } from "./lib/api";
 import { HistoryRecord } from "./lib/types";
 import { sendLoginLink, completeLoginLinkIfPresent, logout, hasSessionToken } from "./lib/auth";
 import { importLocalHistory, pushRecord, pullAllHistory, fetchSubscription } from "./lib/sync";
+import { playSuckSound } from "./lib/sound";
 
 export default function Home() {
 	// 多语言控制
@@ -30,6 +31,7 @@ export default function Home() {
 	const [status, setStatus] = useState<"idle" | "recording" | "uploading" | "done" | "error">("idle");
 	const [errorMessage, setErrorMessage] = useState("");
 	const [isOnline, setIsOnline] = useState(() => (typeof navigator === "undefined" ? true : navigator.onLine));
+	const [isSucking, setIsSucking] = useState(false);
 
 	// 输入配置
 	const [userToneSample, setUserToneSample] = useState(() => (typeof window === "undefined" ? "" : localStorage.getItem("dumpit_user_tone") || ""));
@@ -334,8 +336,11 @@ export default function Home() {
 
 	// 9. 在线音频提交
 	const uploadAndProcess = async (audioBlob: Blob) => {
+		playSuckSound();
+		setIsSucking(true);
+		setTimeout(() => setIsSucking(false), 300);
 		setStatus("uploading");
-		
+
 		const formData = new FormData();
 		const ext = mediaRecorderRef.current?.mimeType.includes("webm") ? "webm" : "mp4";
 		const audioFile = new File([audioBlob], `dump_audio.${ext}`, { type: audioBlob.type });
@@ -752,7 +757,7 @@ ${calendarEvents.map(event => `- **${event.title}** (${event.time})`).join("\n")
 				</header>
 
 				{/* 录音卡片 */}
-				<section ref={recorderRef} className="recorder-card">
+				<section ref={recorderRef} className={`recorder-card ${isSucking ? "sucking" : ""}`}>
 					{status === "uploading" ? (
 						<div className="loader-container">
 							<div className="spinner"></div>
