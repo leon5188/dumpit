@@ -17,6 +17,7 @@ import '../services/auth_service.dart';
 import '../services/sync_service.dart';
 import 'login_page.dart';
 import '../services/mobile_sound_service.dart';
+import '../services/association.dart';
 
 class ToolLink {
   final String text;
@@ -51,6 +52,10 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
   final Random _brainRandom = Random();
   Timer? _brainTimer; // 空闲时脑力缓慢回升的循环
 
+  // 脑子里漂浮的「想法碎片」常驻动画层（负荷越高越多越乱）
+  final List<_BrainThought> _brainThoughts = [];
+  late final AnimationController _thoughtAnim;
+
   // 录音状态
   final AudioRecorder _audioRecorder = AudioRecorder();
   bool _isRecording = false;
@@ -77,9 +82,11 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
 
   // 核心提取结果 (用于当前活跃查看)
   String _summary = '';
-  List<String> _actionItems = [];
-  List<String> _keyInsights = [];
+  List<ImportanceItem> _actionItems = [];
+  List<ImportanceItem> _keyInsights = [];
+  List<ImportanceItem> _infoItems = [];
   List<CalendarEvent> _calendarEvents = [];
+  String _emotion = '';
 
   // 历史数据库
   List<HistoryRecord> _historyList = [];
@@ -159,18 +166,26 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
     // App 已在前台/后台运行时被 Action Button 再次唤起（热启动）
     _launchUrlSubscription = DeviceSyncService.onLaunchUrl.listen(_handleLaunchUrl);
 
+    // 脑子里漂浮想法碎片的常驻动画
+    _thoughtAnim = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 8),
+    )..repeat();
+    _initBrainThoughts();
+
     // 脑力容量条：空闲时缓慢回升（脑子在一直塞新想法）
     _startBrainTick();
   }
 
   // 空闲时脑力负荷缓升；接近塞爆触发抖动预警
+  // 调慢：每 3 秒 +0.002，约 8~9 分钟才从空到满，符合「脑子慢慢塞满」的真实节奏
   void _startBrainTick() {
     _brainTimer?.cancel();
-    _brainTimer = Timer.periodic(const Duration(milliseconds: 400), (_) {
+    _brainTimer = Timer.periodic(const Duration(seconds: 3), (_) {
       if (!mounted) return;
       setState(() {
         if (_brainLoad < 1.0) {
-          _brainLoad = min(1.0, _brainLoad + 0.004);
+          _brainLoad = min(1.0, _brainLoad + 0.002);
         }
         _brainOverloaded = _brainLoad >= 0.85;
       });
@@ -185,6 +200,7 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
       _brainOverloaded = _brainLoad >= 0.85;
       _spawnBrainBurst();
     });
+    _syncBrainThoughts();
     _saveBrainLoad();
   }
 
@@ -194,7 +210,31 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
       _brainLoad = 0.95;
       _brainOverloaded = true;
     });
+    _syncBrainThoughts();
     _saveBrainLoad();
+  }
+
+  // 脑子里漂浮想法碎片的初始化：数量随当前负荷（负荷越高碎念越多）
+  void _initBrainThoughts() {
+    _brainThoughts.clear();
+    final count = _thoughtCountForLoad(_brainLoad);
+    for (var i = 0; i < count; i++) {
+      _brainThoughts.add(_BrainThought.random(_brainRandom));
+    }
+  }
+
+  // 负荷 -> 漂浮碎片数量（0 负荷约 4 个，满载约 22 个）
+  int _thoughtCountForLoad(double load) => 4 + (load * 18).round();
+
+  // 负荷变化时同步碎片数量（倾倒后减少，塞满后增加）
+  void _syncBrainThoughts() {
+    final target = _thoughtCountForLoad(_brainLoad);
+    while (_brainThoughts.length < target) {
+      _brainThoughts.add(_BrainThought.random(_brainRandom));
+    }
+    while (_brainThoughts.length > target) {
+      _brainThoughts.removeLast();
+    }
   }
 
   void _spawnBrainBurst() {
@@ -252,6 +292,7 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
     _amplitudeSubscription?.cancel();
     _timer?.cancel();
     _brainTimer?.cancel();
+    _thoughtAnim.dispose();
     _scrollController.dispose();
     _toneController.dispose();
     _promptController.dispose();
@@ -458,9 +499,20 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
     
     setState(() {
       _summary = demo['summary'];
-      _actionItems = List<String>.from(demo['action_items']);
-      _keyInsights = List<String>.from(demo['key_insights']);
+      _actionItems = (demo['action_items'] as List? ?? [])
+          .whereType<String>()
+          .map((t) => ImportanceItem(text: t, importance: 0.5))
+          .toList();
+      _keyInsights = (demo['key_insights'] as List? ?? [])
+          .whereType<String>()
+          .map((t) => ImportanceItem(text: t, importance: 0.5))
+          .toList();
+      _infoItems = (demo['info_items'] as List? ?? [])
+          .whereType<String>()
+          .map((t) => ImportanceItem(text: t, importance: 0.4))
+          .toList();
       _calendarEvents = List<CalendarEvent>.from(demo['calendar_events']);
+      _emotion = demo['emotion']?.toString() ?? '';
       _activeRecordId = 'demo-id';
     });
 
@@ -474,7 +526,9 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
       _summary = record.summary;
       _actionItems = record.actionItems;
       _keyInsights = record.keyInsights;
+      _infoItems = record.infoItems;
       _calendarEvents = record.calendarEvents;
+      _emotion = record.emotion;
       _activeRecordId = record.id;
       _status = 'done';
       _errorMsg = '';
@@ -498,7 +552,11 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
           summary: _summary,
           actionItems: _actionItems,
           keyInsights: _keyInsights,
+          infoItems: _infoItems,
+          emotion: _emotion,
           calendarEvents: _calendarEvents,
+          historyList: _historyList,
+          activeRecordId: _activeRecordId,
           onArchive: () {
             Navigator.pop(context);
             _archiveActiveRecord();
@@ -520,6 +578,40 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
         );
       },
     );
+  }
+
+  // 壁垒3：天才构想主动提醒 —— 检测新记录与历史记录间的高频关联概念，
+  // 若命中（共享 ≥2 个 2-gram 且非自身），弹出「你曾经有过这个天才构想」提示，
+  // 强化「越用越懂我」的个人专属大脑（Data Flywheel）感知。
+  void _detectGeniusConnection(HistoryRecord newRecord) {
+    if (_historyList.length < 2) return; // 至少要有历史记录才能关联
+    final others = _historyList.where((r) => r.id != newRecord.id).toList();
+    if (others.isEmpty) return;
+
+    final result = AssociationService.analyze([newRecord, ...others]);
+    // 找出与 newRecord 相连且 shared >= 2 的边
+    final hitGrams = <String>{};
+    for (final link in result.links) {
+      if (link.a == newRecord.id || link.b == newRecord.id) {
+        if (link.shared >= 2) {
+          // 找到共享概念文本
+          for (final g in result.hotGrams[2] ?? []) {
+            if (g.recordIds.contains(newRecord.id) && g.recordIds.length > 1) {
+              hitGrams.add(g.gram);
+            }
+          }
+        }
+      }
+    }
+
+    if (hitGrams.isNotEmpty && mounted) {
+      final sample = hitGrams.first;
+      _showSnackBar(
+        _isZh
+            ? '💡 天才构想连线：你之前也想到过「$sample」，已在全局脑网连起来了'
+            : '💡 Genius connection: you thought about "$sample" before — linked in your brain web',
+      );
+    }
   }
 
   // 归档卡片 (移入 Vault)
@@ -563,7 +655,9 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
     _summary = '';
     _actionItems = [];
     _keyInsights = [];
+    _infoItems = [];
     _calendarEvents = [];
+    _emotion = '';
     _activeRecordId = null;
     _status = 'idle';
   }
@@ -635,18 +729,32 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
       final file = File(_localAudioPath!);
       if (await file.exists()) {
         MobileSoundService().playSuck();
-        await _uploadAndProcessAudio(file);
+        // 壁垒1：倾泻与整理绝对分离 —— 录音一停立即返回，后台异步整理，不阻塞 UI
+        unawaited(_uploadAndProcessAudio(file));
       }
     }
   }
 
   Future<void> _uploadAndProcessAudio(File file) async {
+    // 壁垒1：录音一停立即在本地落一条「整理中」草稿，用户马上能继续倾倒，不卡 UI
+    final draftId = DateTime.now().millisecondsSinceEpoch.toString();
+    final draft = HistoryRecord(
+      id: draftId,
+      timestamp: DateTime.now().toLocal().toString().substring(0, 16),
+      rawText: '',
+      summary: _isZh ? '🤖 AI 正在后台整理你的倾泻…' : '🤖 AI is restructuring your dump…',
+      actionItems: const [],
+      keyInsights: const [],
+      infoItems: const [],
+      calendarEvents: const [],
+      status: 'processing',
+      folder: 'inbox',
+    );
     setState(() {
-      _status = 'uploading';
+      _historyList.insert(0, draft);
+      _status = 'idle'; // 录音 UI 立即恢复，不显示 loading
     });
-
-    // 弹出一个正在转译处理的 BottomSheet
-    _showUploadingSheet();
+    await _saveHistoryToLocal();
 
     try {
       final result = await ApiService.uploadAudio(
@@ -655,26 +763,41 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
         customPrompt: _promptController.text,
       );
 
-      final List rawActions = result['action_items'] ?? [];
-      final List rawInsights = result['key_insights'] ?? [];
+      final List rawActions = result['action_items_v2'] ?? result['action_items'] ?? [];
+      final List rawInsights = result['key_insights_v2'] ?? result['key_insights'] ?? [];
+      final List rawInfos = result['info_items_v2'] ?? result['info_items'] ?? [];
       final List rawEvents = result['calendar_events'] ?? [];
 
       final summary = result['summary'] ?? '';
-      final actions = rawActions.map((e) => e.toString()).toList();
-      final insights = rawInsights.map((e) => e.toString()).toList();
+      final emotion = result['emotion']?.toString() ?? '';
+      // v2 为对象数组（{text, importance}），旧版为纯字符串；两者都兼容
+      final actions = rawActions
+          .map((e) => e is Map
+              ? ImportanceItem.fromJson(Map<String, dynamic>.from(e))
+              : ImportanceItem(text: e.toString(), importance: 0.5))
+          .toList();
+      final insights = rawInsights
+          .map((e) => e is Map
+              ? ImportanceItem.fromJson(Map<String, dynamic>.from(e))
+              : ImportanceItem(text: e.toString(), importance: 0.5))
+          .toList();
+      final infos = rawInfos
+          .map((e) => e is Map
+              ? ImportanceItem.fromJson(Map<String, dynamic>.from(e))
+              : ImportanceItem(text: e.toString(), importance: 0.4))
+          .toList();
       final events = rawEvents.map((e) => CalendarEvent.fromJson(e)).toList();
 
-      // 先关闭 Loading Sheet
-      Navigator.pop(context);
-
       final newRecord = HistoryRecord(
-        id: DateTime.now().millisecondsSinceEpoch.toString(),
+        id: draftId, // 复用草稿 id，原地替换，保持顶部位置
         timestamp: DateTime.now().toLocal().toString().substring(0, 16),
         rawText: '',
         summary: summary,
         actionItems: actions,
         keyInsights: insights,
+        infoItems: infos,
         calendarEvents: events,
+        emotion: emotion,
         status: 'done',
         folder: 'inbox',
       );
@@ -683,20 +806,27 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
         _summary = summary;
         _actionItems = actions;
         _keyInsights = insights;
+        _infoItems = infos;
         _calendarEvents = events;
+        _emotion = emotion;
         _status = 'done';
 
-        _historyList.insert(0, newRecord);
+        // 用正式记录原地替换草稿（按 id 找到草稿位置）
+        _historyList = _historyList.map((r) => r.id == draftId ? newRecord : r).toList();
         _activeRecordId = newRecord.id;
         _dumpBrain(); // 倾倒一条想法 → 脑力释放 5%~10% + 碎片爆开
       });
+
+      // 壁垒3：天才构想主动提醒 —— 检测新记录与历史的高频关联概念
+      _detectGeniusConnection(newRecord);
 
       await _saveHistoryToLocal();
 
       // 云同步为尽力而为：失败不阻塞当前操作，本地数据始终是可用的兜底
       unawaited(SyncService.pushRecord(newRecord));
 
-      _showSnackBar(_isZh ? '脑力倾倒整理成功！' : 'Restructured successfully!');
+      // 异步完成通知（壁垒1：整理在后台跑完才提示，不阻塞录音）
+      _showSnackBar(_isZh ? '🤖 AI 整理完成！点开查看你的专属大脑' : '🤖 AI done! Tap to view your brain web');
       
       // 直接弹出结果详情页
       _showRestructuredDetailsSheet();
@@ -1217,6 +1347,12 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
                   ),
                 ),
               )),
+          // 脑子里漂浮的想法碎片常驻层（负荷越高越多越乱，直观表达「脑子里塞满乱念头」）
+          BrainThoughtsLayer(
+            thoughts: _brainThoughts,
+            load: _brainLoad,
+            animation: _thoughtAnim,
+          ),
           Padding(
             padding: const EdgeInsets.all(20),
             child: Column(
@@ -1950,6 +2086,97 @@ class _BrainBurst {
     required this.color,
     required this.size,
   });
+}
+
+// 脑子里持续漂浮的「想法碎片」：一个小气泡/碎念，负荷越高颜色越偏红、漂得越乱
+class _BrainThought {
+  Offset pos; // 归一化坐标 0~1（相对卡片）
+  final double speed; // 漂动速度
+  final double phase; // 漂动相位
+  final double size;
+  final Color color;
+  _BrainThought({
+    required this.pos,
+    required this.speed,
+    required this.phase,
+    required this.size,
+    required this.color,
+  });
+
+  // 随机生成一个碎片（负荷决定颜色由外部传入）
+  factory _BrainThought.random(Random r) {
+    return _BrainThought(
+      pos: Offset(r.nextDouble(), r.nextDouble()),
+      speed: 0.05 + r.nextDouble() * 0.12,
+      phase: r.nextDouble() * 2 * pi,
+      size: 3 + r.nextDouble() * 5,
+      color: Colors.white,
+    );
+  }
+
+  // 根据负荷更新漂浮位置（乱漂：用相位让它在卡片内缓慢游走）
+  void drift(double t, double load) {
+    final chaos = 0.02 + load * 0.06; // 负荷越高漂得越乱
+    pos = Offset(
+      (pos.dx + speed * chaos * cos(t + phase)) % 1.0,
+      (pos.dy + speed * chaos * sin(t * 1.3 + phase)) % 1.0,
+    );
+    if (pos.dx < 0) pos = Offset(pos.dx + 1, pos.dy);
+    if (pos.dy < 0) pos = Offset(pos.dx, pos.dy + 1);
+  }
+}
+
+// 脑力卡片里的漂浮想法碎片层（常驻动画）
+class BrainThoughtsLayer extends StatefulWidget {
+  final List<_BrainThought> thoughts;
+  final double load;
+  final Animation<double> animation;
+  const BrainThoughtsLayer({
+    super.key,
+    required this.thoughts,
+    required this.load,
+    required this.animation,
+  });
+  @override
+  State<BrainThoughtsLayer> createState() => _BrainThoughtsLayerState();
+}
+
+class _BrainThoughtsLayerState extends State<BrainThoughtsLayer> {
+  @override
+  Widget build(BuildContext context) {
+    final t = widget.animation.value * 2 * pi;
+    // 负荷越高颜色越偏红
+    final base = Color.lerp(const Color(0xFF9D7BFF), const Color(0xFFFF3B30), widget.load)!;
+    return IgnorePointer(
+      child: LayoutBuilder(
+        builder: (ctx, constraints) {
+          final w = constraints.maxWidth;
+          final h = constraints.maxHeight;
+          return Stack(
+            children: widget.thoughts.map((th) {
+              th.drift(t, widget.load);
+              final x = th.pos.dx * w;
+              final y = th.pos.dy * h;
+              final alpha = 0.25 + widget.load * 0.5;
+              return Positioned(
+                left: x,
+                top: y,
+                child: Container(
+                  width: th.size,
+                  height: th.size,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: base.withOpacity(alpha),
+                    boxShadow: [BoxShadow(color: base.withOpacity(alpha * 0.8), blurRadius: th.size)],
+                  ),
+                ),
+              );
+            }).toList(),
+          );
+        },
+      ),
+    );
+  }
 }
 
 

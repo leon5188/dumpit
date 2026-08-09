@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
+import '../../models/history_record.dart';
 import '../../services/mobile_sound_service.dart';
 
 class TodoManager extends StatefulWidget {
-  final List<String> actionItems;
-  final Function(List<String>) onTodosChanged;
+  final List<ImportanceItem> actionItems;
+  final Function(List<ImportanceItem>) onTodosChanged;
 
   const TodoManager({
     super.key,
@@ -19,17 +20,24 @@ class _TodoManagerState extends State<TodoManager> {
   final TextEditingController _controller = TextEditingController();
   final Map<int, bool> _checkedMap = {};
 
+  // 按重要度降序（重要的排前面），保持索引可对应
+  List<ImportanceItem> get _sorted => List<ImportanceItem>.from(widget.actionItems)
+    ..sort((a, b) => b.importance.compareTo(a.importance));
+
   void _addTodo() {
     final text = _controller.text.trim();
     if (text.isEmpty) return;
 
-    final updated = List<String>.from(widget.actionItems)..add(text);
+    final updated = List<ImportanceItem>.from(widget.actionItems)
+      ..add(ImportanceItem(text: text, importance: 0.5));
     widget.onTodosChanged(updated);
     _controller.clear();
   }
 
   void _deleteTodo(int index) {
-    final updated = List<String>.from(widget.actionItems)..removeAt(index);
+    final sorted = _sorted;
+    final removed = sorted[index];
+    final updated = List<ImportanceItem>.from(widget.actionItems)..remove(removed);
     setState(() {
       _checkedMap.remove(index);
       // 索引需要重新对齐
@@ -50,7 +58,8 @@ class _TodoManagerState extends State<TodoManager> {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    
+    final sorted = _sorted;
+
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -86,10 +95,11 @@ class _TodoManagerState extends State<TodoManager> {
             ListView.builder(
               shrinkWrap: true,
               physics: const NeverScrollableScrollPhysics(),
-              itemCount: widget.actionItems.length,
+              itemCount: sorted.length,
               itemBuilder: (context, index) {
-                final todo = widget.actionItems[index];
+                final todo = sorted[index];
                 final isChecked = _checkedMap[index] ?? false;
+                final isHot = todo.importance >= 0.7; // 高重要度 → 红色 ⚡ 高亮
 
                 return Padding(
                   padding: const EdgeInsets.symmetric(vertical: 4),
@@ -108,7 +118,7 @@ class _TodoManagerState extends State<TodoManager> {
                           decoration: BoxDecoration(
                             borderRadius: BorderRadius.circular(6),
                             border: Border.all(
-                              color: isChecked ? Colors.pinkAccent : Colors.grey,
+                              color: isChecked ? Colors.pinkAccent : (isHot ? Colors.redAccent : Colors.grey),
                               width: 1.5,
                             ),
                             color: isChecked ? Colors.pinkAccent.withOpacity(0.2) : Colors.transparent,
@@ -119,13 +129,19 @@ class _TodoManagerState extends State<TodoManager> {
                         ),
                       ),
                       const SizedBox(width: 12),
+                      if (isHot)
+                        const Padding(
+                          padding: EdgeInsets.only(right: 4),
+                          child: Text('⚡', style: TextStyle(fontSize: 13)),
+                        ),
                       Expanded(
                         child: Text(
-                          todo,
+                          todo.text,
                           style: TextStyle(
                             fontSize: 14,
                             decoration: isChecked ? TextDecoration.lineThrough : null,
-                            color: isChecked ? Colors.grey : null,
+                            color: isChecked ? Colors.grey : (isHot ? Colors.redAccent : null),
+                            fontWeight: isHot ? FontWeight.bold : null,
                           ),
                         ),
                       ),

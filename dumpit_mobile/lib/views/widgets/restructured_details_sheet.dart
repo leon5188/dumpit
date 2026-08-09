@@ -4,18 +4,24 @@ import '../../services/device_sync_service.dart';
 import 'todo_manager.dart';
 import 'mind_web_view.dart';
 import 'timeline_view.dart';
+import 'info_manager.dart';
+import 'global_mind_web_view.dart';
 
 // 📑 嵌套 TabView 的 AI 梳理详情 BottomSheet 浮层组件
 class RestructuredDetailsSheet extends StatefulWidget {
   final bool isZh;
   final String summary;
-  final List<String> actionItems;
-  final List<String> keyInsights;
+  final List<ImportanceItem> actionItems;
+  final List<ImportanceItem> keyInsights;
+  final List<ImportanceItem> infoItems;
+  final String emotion;
   final List<CalendarEvent> calendarEvents;
+  final List<HistoryRecord> historyList; // 全量历史，用于跨记录关联图谱
+  final String? activeRecordId; // 当前查看的记录
   final VoidCallback onArchive;
   final VoidCallback onDestroy;
   final VoidCallback onSyncNotion;
-  final Function(List<String>) onTodosChanged;
+  final Function(List<ImportanceItem>) onTodosChanged;
 
   const RestructuredDetailsSheet({
     super.key,
@@ -23,7 +29,11 @@ class RestructuredDetailsSheet extends StatefulWidget {
     required this.summary,
     required this.actionItems,
     required this.keyInsights,
+    required this.infoItems,
+    this.emotion = '',
     required this.calendarEvents,
+    this.historyList = const [],
+    this.activeRecordId,
     required this.onArchive,
     required this.onDestroy,
     required this.onSyncNotion,
@@ -37,11 +47,12 @@ class RestructuredDetailsSheet extends StatefulWidget {
 class _RestructuredDetailsSheetState extends State<RestructuredDetailsSheet> with SingleTickerProviderStateMixin {
   late TabController _sheetTabController;
   bool _isFocusPlaying = false;
+  bool _globalWeb = false; // 网状图 Tab：true=全局跨记录脑网，false=当前记录
 
   @override
   void initState() {
     super.initState();
-    _sheetTabController = TabController(length: 4, vsync: this);
+    _sheetTabController = TabController(length: 5, vsync: this);
   }
 
   @override
@@ -80,6 +91,20 @@ class _RestructuredDetailsSheetState extends State<RestructuredDetailsSheet> wit
                   maxLines: 1,
                 ),
               ),
+              if (widget.emotion.isNotEmpty)
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: _emotionColor(widget.emotion).withOpacity(0.15),
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(color: _emotionColor(widget.emotion).withOpacity(0.5)),
+                  ),
+                  child: Text(
+                    '${_emotionEmoji(widget.emotion)} ${widget.emotion}',
+                    style: TextStyle(color: _emotionColor(widget.emotion), fontSize: 12, fontWeight: FontWeight.bold),
+                  ),
+                ),
+              const SizedBox(width: 8),
               Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
@@ -139,7 +164,7 @@ class _RestructuredDetailsSheetState extends State<RestructuredDetailsSheet> wit
                         ),
                       );
                       try {
-                        final success = await DeviceSyncService.syncReminders(widget.actionItems);
+                        final success = await DeviceSyncService.syncReminders(widget.actionItems.map((e) => e.text).toList());
                         if (success && mounted) {
                           messenger.showSnackBar(
                             SnackBar(
@@ -199,6 +224,7 @@ class _RestructuredDetailsSheetState extends State<RestructuredDetailsSheet> wit
               Tab(text: widget.isZh ? '📝 重构' : '📝 Summary'),
               Tab(text: widget.isZh ? '✅ 待办' : '✅ Todos'),
               Tab(text: widget.isZh ? '🕸️ 网状图' : '🕸️ Web'),
+              Tab(text: widget.isZh ? '💡 备忘' : '💡 Info'),
               Tab(text: widget.isZh ? '📅 时间轴' : '📅 Timeline'),
             ],
           ),
@@ -219,18 +245,102 @@ class _RestructuredDetailsSheetState extends State<RestructuredDetailsSheet> wit
                   actionItems: widget.actionItems,
                   onTodosChanged: widget.onTodosChanged,
                 ),
-                // Tab 3: 可拖拽网状图
-                MindWebView(
-                  keyInsights: widget.keyInsights,
-                  actionItems: widget.actionItems,
+                // Tab 3: 网状图（可在「本条」与「全局脑网」间切换）
+                Column(
+                  children: [
+                    Row(
+                      children: [
+                        const Spacer(),
+                        ToggleButtons(
+                          isSelected: [!_globalWeb, _globalWeb],
+                          onPressed: (i) => setState(() => _globalWeb = i == 1),
+                          borderRadius: BorderRadius.circular(8),
+                          selectedColor: Colors.white,
+                          fillColor: Colors.purpleAccent.withOpacity(0.3),
+                          color: Colors.grey,
+                          constraints: const BoxConstraints(minHeight: 30, minWidth: 70),
+                          children: [
+                            Text(widget.isZh ? '本条' : 'This'),
+                            Text(widget.isZh ? '全局脑网' : 'Global'),
+                          ],
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    Expanded(
+                      child: _globalWeb
+                          ? GlobalMindWebView(
+                              historyList: widget.historyList,
+                              activeRecordId: widget.activeRecordId,
+                            )
+                          : MindWebView(
+                              keyInsights: widget.keyInsights,
+                              actionItems: widget.actionItems,
+                              infoItems: widget.infoItems,
+                            ),
+                    ),
+                  ],
                 ),
-                // Tab 4: 纵向时间轴日程
-                TimelineView(events: widget.calendarEvents),
+                // Tab 4: 备忘信息
+                InfoManager(infoItems: widget.infoItems),
+                // Tab 5: 纵向时间轴日程
+                TimelineView(
+                  events: widget.calendarEvents,
+                  highPriority: widget.actionItems
+                      .where((e) => e.importance >= 0.7)
+                      .toList(),
+                ),
               ],
             ),
           ),
         ],
       ),
     );
+  }
+}
+
+// 情绪标签 → 配色（直观区分 ADHD 倾泻时的情绪状态）
+Color _emotionColor(String emotion) {
+  switch (emotion) {
+    case '焦虑':
+      return Colors.orangeAccent;
+    case '兴奋':
+    case '期待':
+      return Colors.amberAccent;
+    case '平静':
+    case '满足':
+      return Colors.greenAccent;
+    case '混乱':
+      return Colors.purpleAccent;
+    case '疲惫':
+      return Colors.blueGrey;
+    case '沮丧':
+      return Colors.blueAccent;
+    default:
+      return Colors.grey;
+  }
+}
+
+// 情绪标签 → emoji
+String _emotionEmoji(String emotion) {
+  switch (emotion) {
+    case '焦虑':
+      return '😰';
+    case '兴奋':
+      return '🤩';
+    case '期待':
+      return '🤗';
+    case '平静':
+      return '😌';
+    case '满足':
+      return '😊';
+    case '混乱':
+      return '🌀';
+    case '疲惫':
+      return '😮‍💨';
+    case '沮丧':
+      return '😔';
+    default:
+      return '💭';
   }
 }

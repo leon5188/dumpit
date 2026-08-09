@@ -1,28 +1,33 @@
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
+import '../../models/history_record.dart';
 
 class _InteractiveNode {
   final String id;
   final String label;
   final String type; // 'insight' | 'todo'
+  final double importance; // 0~1，决定节点大小/颜色
   Offset offset;
 
   _InteractiveNode({
     required this.id,
     required this.label,
     required this.type,
+    required this.importance,
     required this.offset,
   });
 }
 
 class MindWebView extends StatefulWidget {
-  final List<String> keyInsights;
-  final List<String> actionItems;
+  final List<ImportanceItem> keyInsights;
+  final List<ImportanceItem> actionItems;
+  final List<ImportanceItem> infoItems;
 
   const MindWebView({
     super.key,
     required this.keyInsights,
     required this.actionItems,
+    this.infoItems = const [],
   });
 
   @override
@@ -45,14 +50,15 @@ class _MindWebViewState extends State<MindWebView> {
     super.didUpdateWidget(oldWidget);
     // 数据更新时重新初始化拓扑节点
     if (oldWidget.keyInsights != widget.keyInsights ||
-        oldWidget.actionItems != widget.actionItems) {
+        oldWidget.actionItems != widget.actionItems ||
+        oldWidget.infoItems != widget.infoItems) {
       _initializeNodes();
     }
   }
 
   void _initializeNodes() {
     _nodes.clear();
-    final totalItems = widget.keyInsights.length + widget.actionItems.length;
+    final totalItems = widget.keyInsights.length + widget.actionItems.length + widget.infoItems.length;
     if (totalItems == 0) return;
 
     // 默认以画布中心为圆心
@@ -63,11 +69,12 @@ class _MindWebViewState extends State<MindWebView> {
     int idx = 0;
     for (final insight in widget.keyInsights) {
       final angle = (idx / totalItems) * 2 * math.pi;
-      final labelText = insight.length > 12 ? '${insight.substring(0, 12)}...' : insight;
+      final labelText = insight.text.length > 12 ? '${insight.text.substring(0, 12)}...' : insight.text;
       _nodes.add(_InteractiveNode(
         id: 'insight-$idx',
         label: labelText,
         type: 'insight',
+        importance: insight.importance,
         offset: Offset(centerX + radius * math.cos(angle), centerY + radius * math.sin(angle)),
       ));
       idx++;
@@ -76,15 +83,31 @@ class _MindWebViewState extends State<MindWebView> {
     int todoIdx = 0;
     for (final todo in widget.actionItems) {
       final angle = (idx / totalItems) * 2 * math.pi;
-      final labelText = todo.length > 12 ? '${todo.substring(0, 12)}...' : todo;
+      final labelText = todo.text.length > 12 ? '${todo.text.substring(0, 12)}...' : todo.text;
       _nodes.add(_InteractiveNode(
         id: 'todo-$todoIdx',
         label: labelText,
         type: 'todo',
+        importance: todo.importance,
         offset: Offset(centerX + radius * math.cos(angle), centerY + radius * math.sin(angle)),
       ));
       idx++;
       todoIdx++;
+    }
+
+    int infoIdx = 0;
+    for (final info in widget.infoItems) {
+      final angle = (idx / totalItems) * 2 * math.pi;
+      final labelText = info.text.length > 12 ? '${info.text.substring(0, 12)}...' : info.text;
+      _nodes.add(_InteractiveNode(
+        id: 'info-$infoIdx',
+        label: labelText,
+        type: 'info',
+        importance: info.importance,
+        offset: Offset(centerX + radius * math.cos(angle), centerY + radius * math.sin(angle)),
+      ));
+      idx++;
+      infoIdx++;
     }
   }
 
@@ -158,15 +181,14 @@ class _MindWebViewState extends State<MindWebView> {
           const SizedBox(height: 12),
           LayoutBuilder(
             builder: (context, constraints) {
-              // 自动适应屏幕宽度
+              // 只在「尺寸确实变化」时更新一次，且避免与节点初始化形成无限重建循环：
+              // 用实例标志位保证每次 layout 至多触发一次回写，且节点布局不再依赖回写后的 size。
               final width = constraints.maxWidth;
-              if (width != _canvasSize.width) {
-                WidgetsBinding.instance.addPostFrameCallback((_) {
-                  setState(() {
-                    _canvasSize = Size(width, 280);
-                    _initializeNodes();
-                  });
-                });
+              if ((width - _canvasSize.width).abs() > 1.0) {
+                _canvasSize = Size(width, 280);
+                // 同步节点坐标时不再 setState（否则 BottomSheet 内会死循环），
+                // 直接基于最新尺寸重算节点位置后由下方 CustomPaint 消费。
+                _relayoutNodes(width);
               }
 
               return Container(
@@ -220,6 +242,22 @@ class _MindWebViewState extends State<MindWebView> {
         ],
       ),
     );
+  }
+
+  // 基于给定画布宽度重算节点坐标（不触发 setState，避免 BottomSheet 内重建死循环）
+  void _relayoutNodes(double width) {
+    if (_nodes.isEmpty) return;
+    final centerX = width / 2;
+    final centerY = 140.0;
+    const radius = 95.0;
+    final total = _nodes.length;
+    for (var i = 0; i < total; i++) {
+      final angle = (i / total) * 2 * math.pi;
+      _nodes[i].offset = Offset(
+        centerX + radius * math.cos(angle),
+        centerY + radius * math.sin(angle),
+      );
+    }
   }
 
   Widget _buildLegend() {
@@ -327,21 +365,29 @@ class _MindWebPainter extends CustomPainter {
     for (int i = 0; i < nodes.length; i++) {
       final node = nodes[i];
       final isInsight = node.type == 'insight';
-      final color = isInsight ? Colors.purpleAccent : Colors.greenAccent;
+      final isInfo = node.type == 'info';
+      // 重要度 → 颜色：高(红)→中(紫/绿/蓝)→低(灰)
+      final color = node.importance >= 0.7
+          ? Colors.redAccent
+          : (isInsight
+              ? Colors.purpleAccent
+              : (isInfo ? Colors.cyanAccent : Colors.greenAccent));
+      // 重要度 → 节点半径：5.0~11.0
+      final baseR = 5.0 + node.importance * 6.0;
       // 相邻节点交替上/下偏移，减少标签在水平相近时相互重叠
       final verticalOffset = i.isEven ? -6.0 : 14.0;
 
       canvas.drawCircle(
         node.offset,
-        9.0,
+        baseR + 4.0,
         Paint()
           ..color = color.withOpacity(0.35)
           ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 6),
       );
-      canvas.drawCircle(node.offset, 5.0, Paint()..color = color);
+      canvas.drawCircle(node.offset, baseR, Paint()..color = color);
       canvas.drawCircle(
         node.offset,
-        5.0,
+        baseR,
         Paint()
           ..color = Colors.white.withOpacity(0.7)
           ..style = PaintingStyle.stroke

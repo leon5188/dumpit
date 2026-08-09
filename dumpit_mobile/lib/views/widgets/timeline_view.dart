@@ -3,8 +3,13 @@ import '../../models/history_record.dart';
 
 class TimelineView extends StatelessWidget {
   final List<CalendarEvent> events;
+  final List<ImportanceItem> highPriority; // importance>=0.7 的高优先级待办，顶部红色高亮
 
-  const TimelineView({super.key, required this.events});
+  const TimelineView({
+    super.key,
+    required this.events,
+    this.highPriority = const [],
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -42,7 +47,61 @@ class TimelineView extends StatelessWidget {
               ),
             )
           else
-            ListView.builder(
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // 🔥 高优先级待办（importance>=0.7）红色高亮区：直观联动 AI 重要度
+                if (highPriority.isNotEmpty) ...[
+                  Container(
+                    margin: const EdgeInsets.only(bottom: 16),
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.redAccent.withOpacity(0.12),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: Colors.redAccent.withOpacity(0.5)),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Row(
+                          children: [
+                            Text('🔥', style: TextStyle(fontSize: 14)),
+                            SizedBox(width: 6),
+                            Text(
+                              '高优先级待办',
+                              style: TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.redAccent,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                        ...highPriority.map((item) => Padding(
+                              padding: const EdgeInsets.symmetric(vertical: 3),
+                              child: Row(
+                                children: [
+                                  const Icon(Icons.priority_high, size: 14, color: Colors.redAccent),
+                                  const SizedBox(width: 6),
+                                  Expanded(
+                                    child: Text(
+                                      item.text,
+                                      style: const TextStyle(
+                                        fontSize: 13,
+                                        color: Colors.white,
+                                        fontWeight: FontWeight.w500,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            )),
+                      ],
+                    ),
+                  ),
+                ],
+                ListView.builder(
               shrinkWrap: true,
               physics: const NeverScrollableScrollPhysics(),
               itemCount: events.length,
@@ -126,6 +185,8 @@ class TimelineView extends StatelessWidget {
                   ),
                 );
               },
+            ),
+              ],
             ),
         ],
       ),

@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
+import 'package:dumpit_mobile/models/history_record.dart';
 
 class ApiService {
   // Go 后端默认 API 地址
@@ -95,8 +96,8 @@ class ApiService {
     required String notionToken,
     required String parentPageId,
     required String summary,
-    required List<String> actionItems,
-    required List<String> keyInsights,
+    required List<ImportanceItem> actionItems,
+    required List<ImportanceItem> keyInsights,
     required List<dynamic> calendarEvents,
   }) async {
     await _postJson(
@@ -105,8 +106,8 @@ class ApiService {
         'notion_token': notionToken,
         'parent_page_id': parentPageId,
         'summary': summary,
-        'action_items': actionItems,
-        'key_insights': keyInsights,
+        'action_items': actionItems.map((e) => e.text).toList(),
+        'key_insights': keyInsights.map((e) => e.text).toList(),
         'calendar_events': calendarEvents.map((e) => {
           'title': e.title,
           'time': e.time,

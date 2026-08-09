@@ -77,11 +77,25 @@ class SyncService {
         timestamp: (r['created_at'] as String? ?? '').replaceFirst('T', ' '),
         rawText: r['raw_text'] as String? ?? '',
         summary: summary['summary'] as String? ?? '',
-        actionItems: List<String>.from(summary['action_items'] ?? []),
-        keyInsights: List<String>.from(summary['key_insights'] ?? []),
+        actionItems: (summary['action_items_v2'] as List? ?? summary['action_items'] as List? ?? [])
+            .map((e) => e is Map
+                ? ImportanceItem.fromJson(Map<String, dynamic>.from(e))
+                : ImportanceItem(text: e.toString(), importance: 0.5))
+            .toList(),
+        keyInsights: (summary['key_insights_v2'] as List? ?? summary['key_insights'] as List? ?? [])
+            .map((e) => e is Map
+                ? ImportanceItem.fromJson(Map<String, dynamic>.from(e))
+                : ImportanceItem(text: e.toString(), importance: 0.5))
+            .toList(),
+        infoItems: (summary['info_items_v2'] as List? ?? summary['info_items'] as List? ?? [])
+            .map((e) => e is Map
+                ? ImportanceItem.fromJson(Map<String, dynamic>.from(e))
+                : ImportanceItem(text: e.toString(), importance: 0.4))
+            .toList(),
         calendarEvents: ((summary['calendar_events'] as List?) ?? [])
             .map((e) => CalendarEvent.fromJson(e as Map<String, dynamic>))
             .toList(),
+        emotion: summary['emotion']?.toString() ?? '',
         status: 'done',
         folder: (r['archived'] == true) ? 'archive' : 'inbox',
       );

@@ -30,3 +30,4 @@ dumpit_mobile/ios/Flutter/Generated.xcconfig
 dumpit_mobile/ios/Flutter/flutter_export_environment.sh
 dumpit_mobile/android/local.properties
 .superpowers/
+.claude/
