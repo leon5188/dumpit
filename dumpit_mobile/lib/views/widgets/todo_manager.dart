@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../services/mobile_sound_service.dart';
 
 class TodoManager extends StatefulWidget {
   final List<String> actionItems;
@@ -99,6 +100,7 @@ class _TodoManagerState extends State<TodoManager> {
                           setState(() {
                             _checkedMap[index] = !isChecked;
                           });
+                          MobileSoundService().playChime();
                         },
                         child: Container(
                           width: 20,

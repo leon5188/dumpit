@@ -21,7 +21,12 @@ void _cleanLegacyTempFiles() async {
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+  try {
+    await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+    debugPrint('✅ Firebase initialized');
+  } catch (e) {
+    debugPrint('❌ Firebase init failed: $e');
+  }
   _cleanLegacyTempFiles();
   runApp(const BrainVentApp());
 }
