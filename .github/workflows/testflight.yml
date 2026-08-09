@@ -36,10 +36,20 @@ jobs:
           BUNDLE_FROZEN: "false"
         run: bundle install
 
-      - name: Write App Store Connect API key
-        run: printf '%s' "$APP_STORE_CONNECT_API_KEY_KEY" > api_key.p8
+      - name: Write App Store Connect API key (JSON)
+        run: |
+          cat > api_key.json <<EOF
+          {
+            "key_id": "$APP_STORE_CONNECT_API_KEY_KEY_ID",
+            "issuer_id": "$APP_STORE_CONNECT_API_KEY_ISSUER_ID",
+            "key": "$(echo "$APP_STORE_CONNECT_API_KEY_KEY" | awk '{printf "%s\\n", $0}')",
+            "in_house": false
+          }
+          EOF
         env:
           APP_STORE_CONNECT_API_KEY_KEY: ${{ secrets.APP_STORE_CONNECT_API_KEY_KEY }}
+          APP_STORE_CONNECT_API_KEY_KEY_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_KEY_ID }}
+          APP_STORE_CONNECT_API_KEY_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_ISSUER_ID }}
 
       - name: fastlane beta (build + upload to TestFlight)
         env:
