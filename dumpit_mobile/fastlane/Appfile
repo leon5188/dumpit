@@ -1,0 +1,4 @@
+# Appfile for BrainVent (com.brainvent.app)
+app_identifier("com.brainvent.app")
+apple_id("peifengni88@gmail.com")
+team_id("9U9HPVSAGB") # from flutter signing output

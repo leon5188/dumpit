@@ -1,0 +1,62 @@
+default_platform(:ios)
+
+# Builds the iOS app from main and uploads a new build to TestFlight.
+# Runs locally (`bundle exec fastlane beta`) or in GitHub Actions on push to main.
+#
+# Auth: App Store Connect API Key. Provide via ENV (CI secrets) or local api_key.json.
+# NOTE: we avoid the `app_store_connect_api_key` action (EC curve bug on ruby 3.3/OpenSSL3);
+# match reads --api_key_path (JSON), and pilot reads APP_STORE_CONNECT_API_KEY_* env vars.
+platform :ios do
+  desc "Build release IPA and upload to TestFlight"
+  lane :beta do
+    setup_ci if ENV["CI"]
+
+    api_key_json = ENV["APP_STORE_CONNECT_API_KEY_FILEPATH"] || File.expand_path("../api_key.json", __dir__)
+
+    # Feed pilot (upload_to_testflight) the key via env — same working path match uses.
+    if File.exist?(api_key_json)
+      require "json"
+      k = JSON.parse(File.read(api_key_json))
+      ENV["APP_STORE_CONNECT_API_KEY_KEY_ID"] ||= k["key_id"]
+      ENV["APP_STORE_CONNECT_API_KEY_ISSUER_ID"] ||= k["issuer_id"]
+      ENV["APP_STORE_CONNECT_API_KEY_KEY"] ||= k["key"]
+    end
+
+    # Pull (or create) the App Store distribution cert + provisioning profile.
+    # In CI readonly: true — the certs repo must already be bootstrapped once.
+    match(
+      type: "appstore",
+      readonly: true,
+      api_key_path: api_key_json,
+      git_url: "https://github.com/leon5188/fastlane-certificates.git",
+      app_identifier: "com.brainvent.app",
+      team_id: "9U9HPVSAGB",
+      username: "peifengni88@gmail.com"
+    )
+
+    # Point the Xcode project at the match profile (manual signing).
+    # Use absolute path to avoid cwd ambiguity inside the lane.
+    update_code_signing_settings(
+      use_automatic_signing: false,
+      team_id: "9U9HPVSAGB",
+      bundle_identifier: "com.brainvent.app",
+      profile_name: "match AppStore com.brainvent.app",
+      code_sign_identity: "iPhone Distribution",
+      path: File.expand_path("../ios/Runner.xcodeproj", __dir__)
+    )
+
+    # Build the Flutter iOS release archive -> IPA
+    Dir.chdir("..") do
+      sh("flutter", "pub", "get")
+      sh("flutter", "build", "ipa", "--release")
+    end
+
+    ipa_path = File.expand_path("../build/ios/ipa/brainvent.ipa", __dir__)
+    upload_to_testflight(
+      ipa: ipa_path,
+      api_key_path: api_key_json,
+      skip_waiting_for_build_processing: false,
+      distribute_external: false
+    )
+  end
+end

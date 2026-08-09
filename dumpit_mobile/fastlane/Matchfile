@@ -1,0 +1,8 @@
+# Matchfile — fastlane match certs storage
+git_url("https://github.com/leon5188/fastlane-certificates.git")
+storage_mode("git")
+type("appstore") # app-store distribution cert + provisioning profile
+app_identifier(["com.brainvent.app"])
+team_id("9U9HPVSAGB")
+username("peifengni88@gmail.com")
+# ENV['MATCH_PASSWORD'] is required (set in CI secrets / local .env)
