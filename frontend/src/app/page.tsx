@@ -1,12 +1,73 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import styles from "./page.module.css";
 
+const APP_STORE_URL = "https://apps.apple.com/app/id6791209882";
+
+const AppStoreBadge = () => (
+	<a
+		href={APP_STORE_URL}
+		className={styles.appStoreBadge}
+		target="_blank"
+		rel="noopener noreferrer"
+	>
+		<svg viewBox="0 0 24 24" width="26" height="26" aria-hidden="true">
+			<path fill="currentColor" d="M16.365 1.43c0 1.14-.46 2.2-1.2 2.98-.86.9-2.27 1.6-3.43 1.51-.14-1.1.43-2.27 1.1-3 .77-.83 2.16-1.46 3.27-1.49.07.33.1.66.26.99zM20.5 17.2c-.55 1.27-.82 1.84-1.53 2.96-.99 1.57-2.39 3.52-4.12 3.53-1.54.02-1.94-1-4.03-.99-2.09.01-2.53 1.01-4.07.99-1.73-.02-3.05-1.78-4.04-3.35C-.02 16.6-.36 11.3 1.36 8.6 2.45 6.7 4.28 5.55 6.04 5.55c1.83 0 2.98 1 4.49 1 1.45 0 2.34-1 4.43-1 1.58 0 3.26.86 4.46 2.34-3.92 2.15-3.29 7.74.68 9.31z" />
+		</svg>
+		<span className={styles.badgeText}>
+			<small>Download on the</small>
+			<strong>App Store</strong>
+		</span>
+	</a>
+);
+
 export default function LandingPage() {
 	const [billingPeriod, setBillingPeriod] = useState<"monthly" | "annually">("monthly");
+
+	// 设备感知：移动流量（尤其 TikTok/Reels 导来的 iOS 用户）直接给商店入口
+	// 用惰性初始化在首次渲染时判定，避免 effect 内同步 setState 触发级联渲染
+	// 支持 ?force=ios|android|other 调试预览（桌面也能看各分支）
+	const [device] = useState<"ios" | "android" | "other">(() => {
+		if (typeof window === "undefined") return "other";
+		const params = new URLSearchParams(window.location.search);
+		const force = params.get("force");
+		if (force === "ios" || force === "android" || force === "other") return force;
+		const ua = navigator.userAgent || "";
+		if (/iPhone|iPad|iPod/i.test(ua)) return "ios";
+		if (/Android/i.test(ua)) return "android";
+		return "other";
+	});
+	const [waitlistEmail, setWaitlistEmail] = useState("");
+	const [waitlistDone, setWaitlistDone] = useState(false);
+
+	const handleWaitlist = (e: React.FormEvent) => {
+		e.preventDefault();
+		if (!waitlistEmail) return;
+		try {
+			const existing = JSON.parse(localStorage.getItem("dumpit_android_waitlist") || "[]");
+			if (!existing.includes(waitlistEmail)) existing.push(waitlistEmail);
+			localStorage.setItem("dumpit_android_waitlist", JSON.stringify(existing));
+		} catch {
+			/* localStorage 不可用时静默降级 */
+		}
+		setWaitlistDone(true);
+	};
+
+	// 管理员导出候补名单：访问 /?export=android 即把 localStorage 名单打到页面
+	useEffect(() => {
+		try {
+			const params = new URLSearchParams(window.location.search);
+			if (params.get("export") === "android") {
+				const list = JSON.parse(localStorage.getItem("dumpit_android_waitlist") || "[]");
+				console.log("ANDROID_WAITLIST:", JSON.stringify(list, null, 2));
+			}
+		} catch {
+			/* ignore */
+		}
+	}, []);
 
 	return (
 		<div className={styles.container}>
@@ -38,17 +99,55 @@ export default function LandingPage() {
 						Let AI <span className={styles.gradientText}>Restructure Your Mind</span>.
 					</h1>
 					<p className={styles.heroSubtitle}>
-						Open your mic, dump everything out. No filters, no edits. AI filters out the filler words, structures your thoughts, and syncs to Notion in 1-click.
+						Open your mic, dump everything out. No filters, no edits. AI structures your messy voice into a clean summary, action list, and insights — in your own tone. Free to start.
 					</p>
 
 					<div className={styles.heroActions}>
-						<Link href="/app" className={styles.btnPrimary}>
-							Start Dumping Free
-						</Link>
-						<a href="#pricing" className={styles.btnSecondary}>
-							View Plans
-						</a>
+						{device === "ios" && (
+							<AppStoreBadge />
+						)}
+						{device === "android" && (
+							<div className={styles.androidWaitlist}>
+								{waitlistDone ? (
+									<div className={styles.waitlistDone}>✅ You&apos;re on the list. Android launch is coming soon.</div>
+								) : (
+									<form onSubmit={handleWaitlist} className={styles.waitlistForm}>
+										<input
+											type="email"
+											required
+											placeholder="you@email.com"
+											value={waitlistEmail}
+											onChange={(e) => setWaitlistEmail(e.target.value)}
+											className={styles.waitlistInput}
+											aria-label="Email for Android early access"
+										/>
+										<button type="submit" className={styles.btnPrimary}>
+											Notify Me
+										</button>
+									</form>
+								)}
+								<p className={styles.waitlistHint}>BrainVent for Android — get early access.</p>
+							</div>
+						)}
+						{device === "other" && (
+							<>
+								<Link href="/app" className={styles.btnPrimary}>
+									Start Dumping Free
+								</Link>
+								<a href="#pricing" className={styles.btnSecondary}>
+									View Plans
+								</a>
+							</>
+						)}
 					</div>
+
+					{(device === "ios" || device === "android") && (
+						<div className={styles.storeSubActions}>
+							<Link href="/app" className={styles.btnSecondary}>
+								Or use the Web App
+							</Link>
+						</div>
+					)}
 				</div>
 
 				{/* 🚀 互动控制台预览 (极简霓虹) */}
@@ -61,25 +160,17 @@ export default function LandingPage() {
 					</div>
 					<div className={styles.previewBody}>
 						<div className={styles.previewRow}>
-							<span className={styles.previewLabel}>🧠 Mind Clutter Index:</span>
-							<span className={styles.previewValueGlow}>24.50% restored</span>
+							<span className={styles.previewLabel}>🧠 Brain Load:</span>
+							<span className={styles.previewValueGlow}>62% cluttered</span>
 						</div>
-						<div className={styles.previewChart}>
-							{/* Canvas 动态脑波线示意 */}
-							<svg width="100%" height="60" style={{ overflow: "visible" }}>
-								<path
-									d="M0 30 C 50 10, 100 50, 150 20 C 200 10, 250 60, 300 30 C 350 15, 400 50, 450 30 L 500 30"
-									fill="none"
-									stroke="url(#neonGradient)"
-									strokeWidth="3"
-								/>
-								<defs>
-									<linearGradient id="neonGradient" x1="0%" y1="0%" x2="100%" y2="0%">
-										<stop offset="0%" stopColor="#8B5CF6" />
-										<stop offset="100%" stopColor="#EC4899" />
-									</linearGradient>
-								</defs>
-							</svg>
+						<div className={styles.brainBarTrack}>
+							{/* 渐变轨道：红(满)→黄→绿(空) */}
+							<div className={styles.brainBarMask}></div>
+							<div className={styles.brainBarFill}></div>
+							<div className={styles.brainBarGlow}></div>
+						</div>
+						<div className={styles.brainHint}>
+							Dump a thought → brain drops 5–10% 💨
 						</div>
 
 						{/* Before & After Demo */}
