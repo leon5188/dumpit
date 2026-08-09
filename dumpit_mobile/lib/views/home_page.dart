@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:record/record.dart';
@@ -15,6 +16,7 @@ import 'widgets/config_dialogs.dart';
 import '../services/auth_service.dart';
 import '../services/sync_service.dart';
 import 'login_page.dart';
+import '../services/mobile_sound_service.dart';
 
 class ToolLink {
   final String text;
@@ -39,6 +41,15 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
   // 双语与侧边分类
   bool _isZh = true;
   String _sidebarFolder = 'inbox'; // 'inbox', 'archive', 'trash'
+
+  // —— 脑力容量条状态 ——
+  // _brainLoad: 脑子里尚未倾倒的混乱量，0=轻松(绿)，1=超载(红)
+  double _brainLoad = 0.45;
+  bool _brainOverloaded = false; // 接近塞爆时抖动预警
+  // 碎片爆开动画用的瞬时粒子（消消乐感）
+  final List<_BrainBurst> _brainBursts = [];
+  final Random _brainRandom = Random();
+  Timer? _brainTimer; // 空闲时脑力缓慢回升的循环
 
   // 录音状态
   final AudioRecorder _audioRecorder = AudioRecorder();
@@ -147,6 +158,76 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
 
     // App 已在前台/后台运行时被 Action Button 再次唤起（热启动）
     _launchUrlSubscription = DeviceSyncService.onLaunchUrl.listen(_handleLaunchUrl);
+
+    // 脑力容量条：空闲时缓慢回升（脑子在一直塞新想法）
+    _startBrainTick();
+  }
+
+  // 空闲时脑力负荷缓升；接近塞爆触发抖动预警
+  void _startBrainTick() {
+    _brainTimer?.cancel();
+    _brainTimer = Timer.periodic(const Duration(milliseconds: 400), (_) {
+      if (!mounted) return;
+      setState(() {
+        if (_brainLoad < 1.0) {
+          _brainLoad = min(1.0, _brainLoad + 0.004);
+        }
+        _brainOverloaded = _brainLoad >= 0.85;
+      });
+    });
+  }
+
+  // 倾倒一条想法：释放 5%~10% 脑力，触发碎片爆开 + 颜色扫过
+  void _dumpBrain() {
+    final released = 0.05 + _brainRandom.nextDouble() * 0.05; // 5%~10%
+    setState(() {
+      _brainLoad = max(0.0, _brainLoad - released);
+      _brainOverloaded = _brainLoad >= 0.85;
+      _spawnBrainBurst();
+    });
+    _saveBrainLoad();
+  }
+
+  // 塞满脑子（Demo 用）：把负荷顶到接近塞爆
+  void _fillBrain() {
+    setState(() {
+      _brainLoad = 0.95;
+      _brainOverloaded = true;
+    });
+    _saveBrainLoad();
+  }
+
+  void _spawnBrainBurst() {
+    for (var i = 0; i < 10; i++) {
+      _brainBursts.add(_BrainBurst(
+        angle: _brainRandom.nextDouble() * 2 * pi,
+        distance: 30 + _brainRandom.nextDouble() * 50,
+        color: _brainColor(max(0.0, _brainLoad)),
+        size: 4 + _brainRandom.nextDouble() * 6,
+      ));
+    }
+    // 250ms 后清除碎片
+    Future.delayed(const Duration(milliseconds: 250), () {
+      if (mounted) {
+        setState(() => _brainBursts.clear());
+      }
+    });
+  }
+
+  // 根据负荷插值颜色：红(1.0) → 黄(0.5) → 绿(0.0)
+  Color _brainColor(double load) {
+    const red = Color(0xFFFF3B30);
+    const yellow = Color(0xFFFFCC00);
+    const green = Color(0xFF34C759);
+    if (load > 0.5) {
+      return Color.lerp(yellow, red, (load - 0.5) / 0.5)!;
+    }
+    return Color.lerp(green, yellow, load / 0.5)!;
+  }
+
+  Future<void> _saveBrainLoad() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setDouble('dumpit_brain_load', _brainLoad);
   }
 
   // 处理外部 Scheme 唤醒
@@ -170,6 +251,7 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
     _audioRecorder.dispose();
     _amplitudeSubscription?.cancel();
     _timer?.cancel();
+    _brainTimer?.cancel();
     _scrollController.dispose();
     _toneController.dispose();
     _promptController.dispose();
@@ -191,6 +273,8 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
       _isPremium = prefs.getBool('dumpit_is_premium') ?? false;
       _licenseKeyController.text = prefs.getString('dumpit_license_key') ?? '';
       _aiPrivacyAgreed = prefs.getBool('dumpit_ai_privacy_agreed') ?? false;
+      _brainLoad = prefs.getDouble('dumpit_brain_load') ?? 0.45;
+      _brainOverloaded = _brainLoad >= 0.85;
       
       final historyRaw = prefs.getString('dumpit_history_list');
       if (historyRaw != null) {
@@ -550,6 +634,7 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
     if (path != null && _localAudioPath != null) {
       final file = File(_localAudioPath!);
       if (await file.exists()) {
+        MobileSoundService().playSuck();
         await _uploadAndProcessAudio(file);
       }
     }
@@ -603,6 +688,7 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
 
         _historyList.insert(0, newRecord);
         _activeRecordId = newRecord.id;
+        _dumpBrain(); // 倾倒一条想法 → 脑力释放 5%~10% + 碎片爆开
       });
 
       await _saveHistoryToLocal();
@@ -1052,7 +1138,7 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
               const SizedBox(height: 24),
 
               // 2. 大脑活跃卡片 (Total Balance 替换，绘制正弦脑波图)
-              _buildBrainWaveCard(),
+              _buildBrainCapacityCard(),
               const SizedBox(height: 20),
 
               // 2.5 🎤 语音录音倾倒中心大卡片
@@ -1079,7 +1165,182 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
     );
   }
 
-  // 大脑活跃趋势卡片 (内置正弦贝塞尔曲线 Canvas 绘制)
+  // 脑力容量条卡片：录入混乱想法→容量从红(超载)回落；倾倒一条→扣 5%~10% + 碎片爆开
+  Widget _buildBrainCapacityCard() {
+    final color = _brainColor(_brainLoad);
+    final pct = (_brainLoad * 100).round();
+    final statusText = _brainLoad >= 0.85
+        ? (_isZh ? '脑子快塞爆了！' : 'Brain overflowing!')
+        : _brainLoad >= 0.5
+            ? (_isZh ? '有点乱' : 'Cluttered')
+            : (_isZh ? '很轻松' : 'Clear');
+    final statusColor = _brainLoad >= 0.85 ? Colors.redAccent : color;
+
+    return Container(
+      height: 170,
+      decoration: BoxDecoration(
+        color: const Color(0xFF1E1E2F),
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: color.withOpacity(0.25)),
+        boxShadow: [
+          BoxShadow(
+            color: color.withOpacity(0.12),
+            blurRadius: 20,
+            spreadRadius: 2,
+          )
+        ],
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Stack(
+        children: [
+          // 接近塞爆时整卡轻微抖动预警
+          AnimatedPositioned(
+            duration: const Duration(milliseconds: 60),
+            left: _brainOverloaded ? (_brainRandom.nextDouble() * 4 - 2) : 0,
+            top: _brainOverloaded ? (_brainRandom.nextDouble() * 4 - 2) : 0,
+            child: Container(width: double.infinity, height: 170),
+          ),
+          // 碎片爆开层（消消乐感）
+          ..._brainBursts.map((b) => Positioned.fill(
+                child: Center(
+                  child: Transform.translate(
+                    offset: Offset(cos(b.angle) * b.distance, sin(b.angle) * b.distance),
+                    child: Container(
+                      width: b.size,
+                      height: b.size,
+                      decoration: BoxDecoration(
+                        color: b.color,
+                        shape: BoxShape.circle,
+                        boxShadow: [BoxShadow(color: b.color.withOpacity(0.8), blurRadius: 6)],
+                      ),
+                    ),
+                  ),
+                ),
+              )),
+          Padding(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    const Text(
+                      '🧠 Brain Load',
+                      style: TextStyle(color: Colors.white30, fontSize: 11, fontWeight: FontWeight.bold),
+                    ),
+                    const Spacer(),
+                    AnimatedContainer(
+                      duration: const Duration(milliseconds: 250),
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: statusColor.withOpacity(0.15),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: Text(
+                        statusText,
+                        style: TextStyle(color: statusColor, fontSize: 9, fontWeight: FontWeight.bold),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 6),
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    AnimatedDefaultTextStyle(
+                      duration: const Duration(milliseconds: 250),
+                      style: TextStyle(color: color, fontSize: 26, fontWeight: FontWeight.bold, letterSpacing: 1.1),
+                      child: Text('$pct%'),
+                    ),
+                    const SizedBox(width: 8),
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 4),
+                      child: Text(
+                        _isZh ? '脑子里还塞着的混乱' : 'clutter left in head',
+                        style: TextStyle(color: Colors.white24, fontSize: 10),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 14),
+                // 容量条：从红(满)到绿(空)扫过
+                Container(
+                  height: 14,
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.06),
+                    borderRadius: BorderRadius.circular(7),
+                  ),
+                  child: Stack(
+                    children: [
+                      // 背景渐变轨道：红→黄→绿（左满右空）
+                      Container(
+                        decoration: const BoxDecoration(
+                          borderRadius: BorderRadius.all(Radius.circular(7)),
+                          gradient: LinearGradient(
+                            colors: [Color(0xFFFF3B30), Color(0xFFFFCC00), Color(0xFF34C759)],
+                          ),
+                        ),
+                      ),
+                      // 用暗色遮罩从右侧盖住"已释放"部分，露出左侧 _brainLoad 比例的彩色
+                      Align(
+                        alignment: Alignment.centerRight,
+                        child: AnimatedContainer(
+                          duration: const Duration(milliseconds: 300),
+                          width: double.infinity,
+                          child: FractionallySizedBox(
+                            widthFactor: 1 - _brainLoad,
+                            child: Container(
+                              decoration: BoxDecoration(
+                                color: Color(0xFF1E1E2F),
+                                borderRadius: BorderRadius.circular(7),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                      // 当前水位高亮线（左侧彩条）
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: FractionallySizedBox(
+                          widthFactor: _brainLoad,
+                          child: Container(
+                            decoration: BoxDecoration(
+                              color: color,
+                              borderRadius: BorderRadius.circular(7),
+                              boxShadow: [BoxShadow(color: color.withOpacity(0.6), blurRadius: 8)],
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const Spacer(),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    _buildNeonActionButton(Icons.auto_awesome, _isZh ? '塞满' : 'Fill', _fillBrain),
+                    _buildNeonActionButton(Icons.bubble_chart, _isZh ? '网状图' : 'Web', () {
+                      if (_summary.isEmpty) {
+                        _loadDemoData();
+                      } else {
+                        _showRestructuredDetailsSheet();
+                      }
+                    }),
+                    _buildNeonActionButton(Icons.archive, _isZh ? '箱库' : 'Vault', () {
+                      Scaffold.of(context).openDrawer();
+                    }),
+                  ],
+                )
+              ],
+            ),
+          )
+        ],
+      ),
+    );
+  }
+
+  // 大脑活跃趋势卡片 (内置正弦贝塞尔曲线 Canvas 绘制) —— 已废弃，保留 painter 以备他用
   Widget _buildBrainWaveCard() {
     return Container(
       height: 170,
@@ -1675,6 +1936,20 @@ class _BrainWavePainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+}
+
+// 脑力倾倒时飞散的碎片（消消乐爆开感）
+class _BrainBurst {
+  final double angle;
+  final double distance;
+  final Color color;
+  final double size;
+  _BrainBurst({
+    required this.angle,
+    required this.distance,
+    required this.color,
+    required this.size,
+  });
 }
 
 
