@@ -104,27 +104,22 @@ class _GlobalMindWebViewState extends State<GlobalMindWebView> {
             )
           else
             SizedBox(
-              height: 300,
-              child: LayoutBuilder(
-                builder: (ctx, constraints) {
-                  if ((constraints.maxWidth - _canvasSize.width).abs() > 1) {
-                    _canvasSize = Size(constraints.maxWidth, 300);
-                    _layout();
-                  }
-                  return Stack(
-                    children: [
-                      CustomPaint(
-                        size: _canvasSize,
-                        painter: _GWebPainter(
-                          nodes: _nodes,
-                          edges: _edges,
-                          activeRecordId: widget.activeRecordId,
-                          isDark: isDark,
-                        ),
-                      ),
-                    ],
-                  );
-                },
+              height: 320,
+              width: double.infinity,
+              child: Center(
+                child: SizedBox(
+                  width: 500,
+                  height: 320,
+                  child: CustomPaint(
+                    size: const Size(500, 320),
+                    painter: _GWebPainter(
+                      nodes: _nodes,
+                      edges: _edges,
+                      activeRecordId: widget.activeRecordId,
+                      isDark: isDark,
+                    ),
+                  ),
+                ),
               ),
             ),
         ],

@@ -179,49 +179,43 @@ class _MindWebViewState extends State<MindWebView> {
             ],
           ),
           const SizedBox(height: 12),
-          LayoutBuilder(
-            builder: (context, constraints) {
-              // 只在「尺寸确实变化」时更新一次，且避免与节点初始化形成无限重建循环：
-              // 用实例标志位保证每次 layout 至多触发一次回写，且节点布局不再依赖回写后的 size。
-              final width = constraints.maxWidth;
-              if ((width - _canvasSize.width).abs() > 1.0) {
-                _canvasSize = Size(width, 280);
-                // 同步节点坐标时不再 setState（否则 BottomSheet 内会死循环），
-                // 直接基于最新尺寸重算节点位置后由下方 CustomPaint 消费。
-                _relayoutNodes(width);
-              }
-
-              return Container(
-                width: width,
-                height: 280,
-                clipBehavior: Clip.antiAlias,
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors: isDark
-                        ? [const Color(0xFF15111F), const Color(0xFF0B0A12)]
-                        : [Colors.black.withOpacity(0.03), Colors.black.withOpacity(0.06)],
-                  ),
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(
-                    color: isDark ? Colors.white.withOpacity(0.05) : Colors.black.withOpacity(0.03),
-                  ),
+          // 关键修复：绝不在 LayoutBuilder 闭包里修改 _canvasSize / 调 _relayoutNodes，
+          // 否则每帧布局都改状态 → 无限重建循环 → 黑屏死机。
+          // 改用固定 canvas 尺寸（500x280），节点布局只在 _initializeNodes 时算一次。
+          SizedBox(
+            width: double.infinity,
+            height: 280,
+            child: Container(
+              width: double.infinity,
+              height: 280,
+              clipBehavior: Clip.antiAlias,
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: isDark
+                      ? [const Color(0xFF15111F), const Color(0xFF0B0A12)]
+                      : [Colors.black.withOpacity(0.03), Colors.black.withOpacity(0.06)],
                 ),
-                child: _nodes.isEmpty
-                    ? const Center(
-                        child: Text(
-                          '未识别到连线关系，请录入卡片内容',
-                          style: TextStyle(color: Colors.grey, fontSize: 13),
-                        ),
-                      )
-                    : Stack(
-                        children: [
-                          GestureDetector(
-                            onPanStart: _handlePanStart,
-                            onPanUpdate: _handlePanUpdate,
-                            onPanEnd: _handlePanEnd,
-                            child: CustomPaint(
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: isDark ? Colors.white.withOpacity(0.05) : Colors.black.withOpacity(0.03),
+                ),
+              ),
+              child: _nodes.isEmpty
+                  ? const Center(
+                      child: Text(
+                        '未识别到连线关系，请录入卡片内容',
+                        style: TextStyle(color: Colors.grey, fontSize: 13),
+                      ),
+                    )
+                  : Stack(
+                      children: [
+                        GestureDetector(
+                          onPanStart: _handlePanStart,
+                          onPanUpdate: _handlePanUpdate,
+                          onPanEnd: _handlePanEnd,
+                          child: CustomPaint(
                               size: _canvasSize,
                               painter: _MindWebPainter(
                                 nodes: _nodes,
@@ -236,9 +230,8 @@ class _MindWebViewState extends State<MindWebView> {
                           ),
                         ],
                       ),
-              );
-            },
-          ),
+                    ),
+                  ),
         ],
       ),
     );

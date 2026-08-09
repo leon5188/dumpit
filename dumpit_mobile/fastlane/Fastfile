@@ -22,20 +22,7 @@ platform :ios do
       ENV["APP_STORE_CONNECT_API_KEY_KEY"] ||= k["key"]
     end
 
-    # Pull (or create) the App Store distribution cert + provisioning profile.
-    # In CI readonly: true — the certs repo must already be bootstrapped once.
-    match(
-      type: "appstore",
-      readonly: true,
-      api_key_path: api_key_json,
-      git_url: "https://github.com/leon5188/fastlane-certificates.git",
-      app_identifier: "com.brainvent.app",
-      team_id: "9U9HPVSAGB",
-      username: "peifengni88@gmail.com"
-    )
-
-    # Point the Xcode project at the match profile (manual signing).
-    # Use absolute path to avoid cwd ambiguity inside the lane.
+    # 使用本机已安装的 match AppStore profile（UUID 1854931c...）+ 钥匙串 Apple Distribution 证书
     update_code_signing_settings(
       use_automatic_signing: false,
       team_id: "9U9HPVSAGB",
