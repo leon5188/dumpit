@@ -45,10 +45,19 @@ platform :ios do
       path: File.expand_path("../ios/Runner.xcodeproj", __dir__)
     )
 
-    # Build the Flutter iOS release archive -> IPA
-    Dir.chdir("..") do
-      sh("flutter", "pub", "get")
-      sh("flutter", "build", "ipa", "--release")
+    # Auto-bump build number on CI so each TestFlight upload is unique.
+    # Local runs keep the pubspec number; CI uses GITHUB_RUN_NUMBER + base.
+    if ENV["CI"] && ENV["GITHUB_RUN_NUMBER"]
+      build_num = (1000 + ENV["GITHUB_RUN_NUMBER"].to_i).to_s
+      Dir.chdir("..") do
+        sh("flutter", "pub", "get")
+        sh("flutter", "build", "ipa", "--release", "--build-number", build_num)
+      end
+    else
+      Dir.chdir("..") do
+        sh("flutter", "pub", "get")
+        sh("flutter", "build", "ipa", "--release")
+      end
     end
 
     ipa_path = File.expand_path("../build/ios/ipa/brainvent.ipa", __dir__)
