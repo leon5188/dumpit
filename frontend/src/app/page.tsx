@@ -103,7 +103,8 @@ export default function LandingPage() {
 					</p>
 
 					<div className={styles.heroActions}>
-						{device === "ios" && (
+						{/* App Store 徽章桌面也常驻显示（iOS + desktop），仅安卓分支让位给候补名单 */}
+						{device !== "android" && (
 							<AppStoreBadge />
 						)}
 						{device === "android" && (
