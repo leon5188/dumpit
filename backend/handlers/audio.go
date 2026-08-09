@@ -160,9 +160,10 @@ func (h *AudioHandler) UploadAndProcessAudio(c echo.Context) error {
 	// 如果 Whisper 转录出空文本，直接返回
 	if rawText == "" {
 		return c.JSON(http.StatusOK, services.ProcessedDump{
-			Summary:     "未检测到明显的语音内容，请重新录音倾倒。",
-			ActionItems: []string{},
-			KeyInsights: []string{},
+			Summary:        "未检测到明显的语音内容，请重新录音倾倒。",
+			ActionItems:    []services.ImportanceItem{},
+			KeyInsights:    []services.ImportanceItem{},
+			CalendarEvents: []services.CalendarEvent{},
 		})
 	}
 
