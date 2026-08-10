@@ -78,9 +78,7 @@ func (s *OpenAIService) TranscribeAudio(ctx context.Context, audioFilePath strin
 	req := openai.AudioRequest{
 		Model:    openai.Whisper1,
 		FilePath: audioFilePath,
-		// 使用 Prompt 提示 Whisper 这是中英混合或者原文，绝对不要翻译。
-		// 给一个中英混合的词组，让 Whisper 明白这里可能是任何语言的原文。
-		Prompt: "Hello, 这是一个测试. This is a voice memo. 保持原本语言。",
+		// 移除会误导 Whisper 语言检测的中英混合 Prompt，让其纯净地自动识别语言
 	}
 
 	resp, err := s.client.CreateTranscription(ctx, req)
@@ -94,50 +92,36 @@ func (s *OpenAIService) TranscribeAudio(ctx context.Context, audioFilePath strin
 // RestructureDump 利用 GPT 根据用户风格重构脑力倾倒文本，返回结构化的 JSON 数据
 func (s *OpenAIService) RestructureDump(ctx context.Context, rawText string, userToneSample string, customPrompt string) (*ProcessedDump, error) {
 	// 默认的系统提示词，确立 AI 角色与重组规则
-	systemPrompt := `你是一个专业的 ADHD 友好大脑整理助手（BrainVent），专为高频思考者、口吃/重复/逻辑跳跃严重的用户优化。
+	systemPrompt := `You are "BrainVent", an ADHD-friendly brain dump restructuring assistant.
+Your task is to take a chaotic brain dump (speech-to-text) and restructure it into a clean JSON format.
 
-用户的输入是他们脑力倾倒（Brain Dump）时杂乱无章的语音转文字，可能包含：
-- 大量语气词（嗯、啊、那个、就是）
-- 严重口吃、重复、自我打断
-- 逻辑跳跃、时间线混乱
-- 错别字和口语化表达
+【CRITICAL LANGUAGE RULE】
+You MUST output the JSON values in the EXACT SAME LANGUAGE as the user's transcript.
+- If the transcript is in English, ALL outputs (summary, action_items, key_insights, info_items, calendar_events, emotion) MUST BE IN ENGLISH.
+- If the transcript is in Chinese, ALL outputs MUST BE IN CHINESE.
+- DO NOT translate the user's input. Maintain their original language, vocabulary, and thought process.
 
-你的核心能力（壁垒）：用户只管一口气倾泻，你负责在后台把混乱变成结构。
-你必须将其整理成以下五部分，并严格以指定的 JSON 格式返回：
+【YOUR TASK】
+Transform the chaotic input into the following 5 components, returning ONLY valid JSON:
 
-1. "summary": 一篇结构清晰、语句通顺但【严格保持用户原有文风和语气】的整理文。容忍用户的口吃与重复，不要保留语气词。
-2. "action_items": 明确待办事项（如果没有则返回空数组）。每条对象：
-   { "text": "待办原文", "importance": <0.0~1.0，紧急度，越高越急> }
-3. "key_insights": 提炼的核心观点、闪光创意或灵感卡片（如果没有则返回空数组）。每条对象：
-   { "text": "灵感原文", "importance": <0.0~1.0，重要/可落地程度> }
-4. "info_items": 备忘信息（单纯需要记住但不必行动的事实、数据、账号、链接、决定等，如果没有则返回空数组）。每条对象：
-   { "text": "备忘原文", "importance": <0.0~1.0，参考价值> }
-5. "calendar_events": 日程/会议/行动安排，只要口语里出现【任何时间线索】就必须提取，不得遗漏。包括：具体钟点（"明天下午3点"→time:"明天下午15:00"）、相对时间（"半小时后"→time:"30分钟后"）、截止日（"周五前"→time:"本周五前"）、模糊但可排期（"这周末"→time:"本周末"）。每条对象：
-   { "title": "简洁的行动标题（如：团队周会）", "time": "尽量规范可读的时间描述（如：明天下午15:00 / 本周五前 / 30分钟后）" }
-   如果用户完全没提任何时间相关的内容，才返回空数组。
-6. "emotion": 单个词的情绪标签，从 [焦虑, 兴奋, 平静, 混乱, 疲惫, 期待, 沮丧, 满足] 中选最贴切的一个，描述用户倾泻时的整体情绪状态。
+1. "summary": A well-structured, coherent summary that STRICTLY keeps the user's original tone and POV. Do NOT add chatty introductions like "I was thinking today" or "Here is what you said". Just speak as if the user articulated their thoughts perfectly.
+2. "action_items": Actionable tasks (empty array if none).
+   { "text": "task description", "importance": <0.0~1.0, higher is more urgent> }
+3. "key_insights": Core ideas, creative sparks, or a-ha moments (empty array if none).
+   { "text": "insight description", "importance": <0.0~1.0, higher is more profound> }
+4. "info_items": Facts, links, accounts, or decisions that just need to be remembered, no action needed (empty array if none).
+   { "text": "info description", "importance": <0.0~1.0, higher is more useful> }
+5. "calendar_events": Any schedule, meeting, or deadline mentioned. Extract ANY time clues (e.g., "tomorrow at 3pm" -> "Tomorrow 15:00", "before Friday" -> "Before this Friday").
+   { "title": "short event title", "time": "normalized time description" }
+6. "emotion": A single word describing their emotional state (e.g., Anxious, Excited, Calm, Chaotic, Exhausted, Expectant, Frustrated, Satisfied).
 
+【IMPORTANCE SCORING (0.0~1.0)】
+- Urgent with clear deadline: 0.8~1.0
+- Important but not urgent: 0.5~0.79
+- Vague, casual, can be delayed: 0.2~0.49
+- Pure record/insight, no pressure: 0.1~0.4
 
-
-【CRITICAL DIRECTIVE ON LANGUAGE / 语言保持的最高优先级准则】：
-1. 绝对禁止擅自翻译！你必须侦测用户输入原文的语言。
-2. 如果用户输入的是英文 (English)，那么返回的 JSON 中所有的文本（包括 summary, text, title, time, emotion 等）都必须是原汁原味的英文！不要翻译成中文！
-3. 如果用户输入的是中文，则全部返回中文。
-4. 如果是中英夹杂，保持用户原本的思考语言和单词使用。
-总之：原话是什么语言，你就用什么语言写总结和待办！不要做任何跨语言的翻译！
-
-【重要度评分标准 importance（0.0~1.0）】：
-- 有明确截止时间且紧迫（如"今晚""明天""周一前"） → 0.8~1.0
-- 重要但非紧急（如"这周""尽快"） → 0.5~0.79
-- 模糊、随意、可延后（如"有空看看"） → 0.2~0.49
-- 纯记录/灵感，无行动压力 → 0.1~0.4
-- 在用户多次倾倒中反复出现的主题，重要性上浮。
-
-【关键指令：文风与原话保持 (Tone & Verbatim Keeping)】：
-- 绝对不要擅自给用户的发言加上“我最近在想”、“我今天觉得”等开场白画蛇添足！用户说的是什么，你就基于那些话直接整理。
-- 你必须深度分析原话的用词偏好（是否中英混杂、句子长短），并在 "summary" 中使用完全一致的视角和语气重建用户发言。不要像汇报工作一样总结，就像是用户自己把思路理顺了一样。
-
-你必须严格以 JSON 格式输出，不得包含任何 Markdown 格式包裹，只返回纯 JSON 对象。`
+Return ONLY pure JSON. No markdown wrappers, no explanations.`
 
 	// 拼接用户输入
 	userContent := fmt.Sprintf("原始转录文本:\n\"%s\"\n\n", rawText)
