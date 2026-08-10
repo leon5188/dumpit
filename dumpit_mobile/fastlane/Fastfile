@@ -22,15 +22,24 @@ platform :ios do
       ENV["APP_STORE_CONNECT_API_KEY_KEY"] ||= k["key"]
     end
 
-    # 使用本机已安装的 match AppStore profile（UUID 1854931c...）+ 钥匙串 Apple Distribution 证书
-    update_code_signing_settings(
-      use_automatic_signing: false,
-      team_id: "9U9HPVSAGB",
-      bundle_identifier: "com.brainvent.app",
-      profile_name: "match AppStore com.brainvent.app",
-      code_sign_identity: "iPhone Distribution",
-      path: File.expand_path("../ios/Runner.xcodeproj", __dir__)
-    )
+    # GitHub Actions 不支持本机 Xcode Automatic 签名，需要使用 match 去拉取
+    if ENV["CI"]
+      match(
+        type: "appstore",
+        readonly: true,
+        app_identifier: "com.brainvent.app"
+      )
+    else
+      # 本地使用本机已安装的 profile
+      update_code_signing_settings(
+        use_automatic_signing: false,
+        team_id: "9U9HPVSAGB",
+        bundle_identifier: "com.brainvent.app",
+        profile_name: "match AppStore com.brainvent.app",
+        code_sign_identity: "iPhone Distribution",
+        path: File.expand_path("../ios/Runner.xcodeproj", __dir__)
+      )
+    end
 
     # Auto-bump build number on CI so each TestFlight upload is unique.
     # Local runs keep the pubspec number; CI uses GITHUB_RUN_NUMBER + base.
