@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import '../../models/history_record.dart';
 import '../../services/device_sync_service.dart';
 import 'todo_manager.dart';
-import 'mind_web_view.dart';
 import 'timeline_view.dart';
 import 'info_manager.dart';
 import 'global_mind_web_view.dart';
@@ -16,12 +15,15 @@ class RestructuredDetailsSheet extends StatefulWidget {
   final List<ImportanceItem> infoItems;
   final String emotion;
   final List<CalendarEvent> calendarEvents;
-  final List<HistoryRecord> historyList; // 全量历史，用于跨记录关联图谱
-  final String? activeRecordId; // 当前查看的记录
+  final List<HistoryRecord> historyList;
+  final String? activeRecordId;
   final VoidCallback onArchive;
   final VoidCallback onDestroy;
   final VoidCallback onSyncNotion;
+  final VoidCallback onSyncReminders;
   final Function(List<ImportanceItem>) onTodosChanged;
+  final Function(String)? onGlobalTodoDeleted;
+  final Function(ImportanceItem, bool)? onTodoChecked; // 暴露给外层
 
   const RestructuredDetailsSheet({
     super.key,
@@ -37,7 +39,10 @@ class RestructuredDetailsSheet extends StatefulWidget {
     required this.onArchive,
     required this.onDestroy,
     required this.onSyncNotion,
+    required this.onSyncReminders,
     required this.onTodosChanged,
+    this.onGlobalTodoDeleted,
+    this.onTodoChecked,
   });
 
   @override
@@ -47,7 +52,6 @@ class RestructuredDetailsSheet extends StatefulWidget {
 class _RestructuredDetailsSheetState extends State<RestructuredDetailsSheet> with SingleTickerProviderStateMixin {
   late TabController _sheetTabController;
   bool _isFocusPlaying = false;
-  bool _globalWeb = false; // 网状图 Tab：true=全局跨记录脑网，false=当前记录
 
   @override
   void initState() {
@@ -196,7 +200,15 @@ class _RestructuredDetailsSheetState extends State<RestructuredDetailsSheet> wit
                     padding: const EdgeInsets.all(6),
                     constraints: const BoxConstraints(),
                     icon: const Icon(Icons.bolt, color: Colors.amberAccent, size: 20),
+                    tooltip: widget.isZh ? '一键同步到 Notion' : 'Sync to Notion',
                     onPressed: widget.onSyncNotion,
+                  ),
+                  IconButton(
+                    padding: const EdgeInsets.all(6),
+                    constraints: const BoxConstraints(),
+                    icon: const Icon(Icons.alarm_add, color: Colors.pinkAccent, size: 20),
+                    tooltip: widget.isZh ? '同步高优待办到系统提醒' : 'Sync to Apple Reminders',
+                    onPressed: widget.onSyncReminders,
                   ),
                   IconButton(
                     padding: const EdgeInsets.all(6),
@@ -220,11 +232,12 @@ class _RestructuredDetailsSheetState extends State<RestructuredDetailsSheet> wit
             indicatorColor: Colors.purpleAccent,
             labelColor: Colors.purpleAccent,
             unselectedLabelColor: Colors.grey,
+            isScrollable: true,
             tabs: [
               Tab(text: widget.isZh ? '📝 重构' : '📝 Summary'),
               Tab(text: widget.isZh ? '✅ 待办' : '✅ Todos'),
-              Tab(text: widget.isZh ? '🕸️ 网状图' : '🕸️ Web'),
-              Tab(text: widget.isZh ? '💡 备忘' : '💡 Info'),
+              Tab(text: widget.isZh ? '💡 洞察' : '💡 Insight'),
+              Tab(text: widget.isZh ? '📦 备忘' : '📦 Info'),
               Tab(text: widget.isZh ? '📅 时间轴' : '📅 Timeline'),
             ],
           ),
@@ -240,55 +253,31 @@ class _RestructuredDetailsSheetState extends State<RestructuredDetailsSheet> wit
                     style: const TextStyle(fontSize: 14, height: 1.6, color: Colors.white),
                   ),
                 ),
-                // Tab 2: 待办清单
+                // Tab 2: 全局待办清单
                 TodoManager(
-                  actionItems: widget.actionItems,
+                  historyList: widget.historyList,
+                  activeRecordId: widget.activeRecordId,
+                  isZh: widget.isZh,
                   onTodosChanged: widget.onTodosChanged,
+                  onGlobalTodoDeleted: widget.onGlobalTodoDeleted,
+                  onTodoChecked: widget.onTodoChecked,
                 ),
-                // Tab 3: 网状图（可在「本条」与「全局脑网」间切换）
-                Column(
-                  children: [
-                    Row(
-                      children: [
-                        const Spacer(),
-                        ToggleButtons(
-                          isSelected: [!_globalWeb, _globalWeb],
-                          onPressed: (i) => setState(() => _globalWeb = i == 1),
-                          borderRadius: BorderRadius.circular(8),
-                          selectedColor: Colors.white,
-                          fillColor: Colors.purpleAccent.withOpacity(0.3),
-                          color: Colors.grey,
-                          constraints: const BoxConstraints(minHeight: 30, minWidth: 70),
-                          children: [
-                            Text(widget.isZh ? '本条' : 'This'),
-                            Text(widget.isZh ? '全局脑网' : 'Global'),
-                          ],
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 8),
-                    Expanded(
-                      child: _globalWeb
-                          ? GlobalMindWebView(
-                              historyList: widget.historyList,
-                              activeRecordId: widget.activeRecordId,
-                            )
-                          : MindWebView(
-                              keyInsights: widget.keyInsights,
-                              actionItems: widget.actionItems,
-                              infoItems: widget.infoItems,
-                            ),
-                    ),
-                  ],
+                // Tab 3: 全局脑网图谱
+                GlobalMindWebView(
+                  historyList: widget.historyList,
+                  activeRecordId: widget.activeRecordId,
+                  isZh: widget.isZh,
                 ),
-                // Tab 4: 备忘信息
-                InfoManager(infoItems: widget.infoItems),
-                // Tab 5: 纵向时间轴日程
+                // Tab 4: 全局备忘信息
+                InfoManager(
+                  historyList: widget.historyList,
+                  activeRecordId: widget.activeRecordId,
+                  isZh: widget.isZh,
+                ),
+                // Tab 5: 全局时间轴
                 TimelineView(
-                  events: widget.calendarEvents,
-                  highPriority: widget.actionItems
-                      .where((e) => e.importance >= 0.7)
-                      .toList(),
+                  historyList: widget.historyList,
+                  isZh: widget.isZh,
                 ),
               ],
             ),

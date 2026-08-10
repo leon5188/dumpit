@@ -2,17 +2,28 @@ import 'package:flutter/material.dart';
 import '../../models/history_record.dart';
 
 class TimelineView extends StatelessWidget {
-  final List<CalendarEvent> events;
-  final List<ImportanceItem> highPriority; // importance>=0.7 的高优先级待办，顶部红色高亮
+  final List<HistoryRecord> historyList;
+  final bool isZh;
 
   const TimelineView({
     super.key,
-    required this.events,
-    this.highPriority = const [],
+    required this.historyList,
+    required this.isZh,
   });
 
   @override
   Widget build(BuildContext context) {
+    // 全局提取所有未归档记录中的事件并按时间合并排序
+    final allEvents = <CalendarEvent>[];
+    final allHighPriority = <ImportanceItem>[];
+    
+    for (var r in historyList) {
+      if (r.folder != 'trash') {
+        allEvents.addAll(r.calendarEvents);
+        allHighPriority.addAll(r.actionItems.where((e) => e.importance >= 0.7));
+      }
+    }
+
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Container(
@@ -28,22 +39,22 @@ class TimelineView extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
-            children: const [
-              Icon(Icons.calendar_today_outlined, color: Colors.pinkAccent, size: 20),
-              SizedBox(width: 8),
+            children: [
+              const Icon(Icons.calendar_today_outlined, color: Colors.pinkAccent, size: 20),
+              const SizedBox(width: 8),
               Text(
-                '📅 原生时间轴行动日程',
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                isZh ? '📅 全局时间轴 (跨记录汇总)' : '📅 Global Timeline',
+                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
               ),
             ],
           ),
           const SizedBox(height: 16),
-          if (events.isEmpty)
-            const Padding(
-              padding: EdgeInsets.symmetric(vertical: 8),
+          if (allEvents.isEmpty)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 8),
               child: Text(
-                '未提取到日程，请录音倾倒包含时间的任务',
-                style: TextStyle(fontSize: 13, color: Colors.grey),
+                isZh ? '全局未提取到日程，请录音倾倒包含时间的任务' : 'No upcoming events found.',
+                style: const TextStyle(fontSize: 13, color: Colors.grey),
               ),
             )
           else
@@ -51,7 +62,7 @@ class TimelineView extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 // 🔥 高优先级待办（importance>=0.7）红色高亮区：直观联动 AI 重要度
-                if (highPriority.isNotEmpty) ...[
+                if (allHighPriority.isNotEmpty) ...[
                   Container(
                     margin: const EdgeInsets.only(bottom: 16),
                     padding: const EdgeInsets.all(12),
@@ -68,7 +79,7 @@ class TimelineView extends StatelessWidget {
                             Text('🔥', style: TextStyle(fontSize: 14)),
                             SizedBox(width: 6),
                             Text(
-                              '高优先级待办',
+                              '全局高优待办 (近期穿插)',
                               style: TextStyle(
                                 fontSize: 13,
                                 fontWeight: FontWeight.bold,
@@ -78,7 +89,7 @@ class TimelineView extends StatelessWidget {
                           ],
                         ),
                         const SizedBox(height: 8),
-                        ...highPriority.map((item) => Padding(
+                        ...allHighPriority.map((item) => Padding(
                               padding: const EdgeInsets.symmetric(vertical: 3),
                               child: Row(
                                 children: [
@@ -104,9 +115,9 @@ class TimelineView extends StatelessWidget {
                 ListView.builder(
               shrinkWrap: true,
               physics: const NeverScrollableScrollPhysics(),
-              itemCount: events.length,
+              itemCount: allEvents.length,
               itemBuilder: (context, index) {
-                final event = events[index];
+                final event = allEvents[index];
                 return IntrinsicHeight(
                   child: Row(
                     children: [
@@ -132,7 +143,7 @@ class TimelineView extends StatelessWidget {
                           Expanded(
                             child: Container(
                               width: 2,
-                              color: index == events.length - 1
+                              color: index == allEvents.length - 1
                                   ? Colors.transparent
                                   : Colors.purpleAccent.withOpacity(0.3),
                             ),

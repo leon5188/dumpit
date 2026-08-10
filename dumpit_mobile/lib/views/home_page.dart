@@ -11,6 +11,7 @@ import '../../services/api_service.dart';
 import '../../services/device_sync_service.dart';
 import '../../services/iap_service.dart';
 import '../translations.dart';
+import '../crash_reporter.dart';
 import 'widgets/restructured_details_sheet.dart';
 import 'widgets/config_dialogs.dart';
 import '../services/auth_service.dart';
@@ -39,6 +40,7 @@ class HomePage extends StatefulWidget {
 }
 
 class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin {
+  final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
   // 双语与侧边分类
   bool _isZh = true;
   String _sidebarFolder = 'inbox'; // 'inbox', 'archive', 'trash'
@@ -178,14 +180,14 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
   }
 
   // 空闲时脑力负荷缓升；接近塞爆触发抖动预警
-  // 调慢：每 3 秒 +0.002，约 8~9 分钟才从空到满，符合「脑子慢慢塞满」的真实节奏
+  // 调慢：每 30 秒 +0.001，约 8~10 小时才从空到满，符合「工作日大脑慢慢塞满」的真实节奏
   void _startBrainTick() {
     _brainTimer?.cancel();
-    _brainTimer = Timer.periodic(const Duration(seconds: 3), (_) {
+    _brainTimer = Timer.periodic(const Duration(seconds: 30), (_) {
       if (!mounted) return;
       setState(() {
         if (_brainLoad < 1.0) {
-          _brainLoad = min(1.0, _brainLoad + 0.002);
+          _brainLoad = min(1.0, _brainLoad + 0.001);
         }
         _brainOverloaded = _brainLoad >= 0.85;
       });
@@ -277,7 +279,7 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
       if (uri.scheme == 'brainvent') {
         if (uri.host == 'record' || uri.queryParameters['action'] == 'start') {
           if (!_isRecording) {
-            _startRecording();
+            _showRecordingSheet(autoStart: true);
           }
         }
       }
@@ -521,7 +523,7 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
   }
 
   // 2. 载入某条历史并弹窗展示四大 Tab
-  void _loadHistoryRecord(HistoryRecord record) {
+  void _loadHistoryRecord(HistoryRecord record, {bool closeDrawer = false}) {
     setState(() {
       _summary = record.summary;
       _actionItems = record.actionItems;
@@ -533,8 +535,14 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
       _status = 'done';
       _errorMsg = '';
     });
-    Navigator.pop(context); // 收起 Drawer
-    _showRestructuredDetailsSheet();
+    // 只有在 Drawer 确实开启且显式要求时才关侧边栏；绝对不能无脑 pop，否则在首页点最近倾倒时会把 HomePage 自身 pop 掉导致返回时黑屏死机！
+    if (closeDrawer && (_scaffoldKey.currentState?.isDrawerOpen ?? false)) {
+      Navigator.pop(context); // 收起 Drawer
+    }
+    // 等待一帧后弹出 Sheet，避免路由冲突
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _showRestructuredDetailsSheet();
+    });
   }
 
   // 3. 弹出霓虹暗黑 TabView 详情 BottomSheet (手机核心体验)
@@ -566,6 +574,7 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
             _destroyActiveRecord();
           },
           onSyncNotion: _syncActiveRecordToNotion,
+          onSyncReminders: _syncReminders, // 新增：Apple Reminders 同步回调
           onTodosChanged: (updated) {
             setState(() {
               _actionItems = updated;
@@ -575,9 +584,63 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
               _saveHistoryToLocal();
             }
           },
+          onGlobalTodoDeleted: (todoText) {
+            // 支持删除其他记录里的跨记录 Todo
+            setState(() {
+              _historyList = _historyList.map((r) {
+                if (r.actionItems.any((e) => e.text == todoText)) {
+                  final newItems = List<ImportanceItem>.from(r.actionItems)..removeWhere((e) => e.text == todoText);
+                  return r.copyWith(actionItems: newItems);
+                }
+                return r;
+              }).toList();
+            });
+            _saveHistoryToLocal();
+          },
+          onTodoChecked: (todo, isChecked) {
+            if (isChecked && todo.importance >= 0.7) {
+              // 勾选高优任务，大幅释放脑负荷 5%（多巴胺反馈）
+              setState(() {
+                _brainLoad = max(0.0, _brainLoad - 0.05);
+                _brainOverloaded = _brainLoad >= 0.85;
+              });
+              _spawnBrainBurst(); // 配合视觉爆开特效
+              _syncBrainThoughts();
+              _saveBrainLoad();
+            }
+          },
         );
       },
     );
+  }
+
+  // 🔔 同步高优待办到 Apple Reminders (壁垒 4：系统级生态寄生)
+  Future<void> _syncReminders() async {
+    // 找出所有高优先级未处理的全局 Todo
+    final itemsToSync = <String>[];
+    for (final r in _historyList) {
+      if (r.folder != 'trash') {
+        for (final act in r.actionItems) {
+          if (act.importance >= 0.7) {
+            itemsToSync.add(act.text);
+          }
+        }
+      }
+    }
+
+    if (itemsToSync.isEmpty) {
+      _showSnackBar(_isZh ? '当前没有重要度 ⚡ 级别的高优待办需要同步' : 'No high-priority todos to sync.');
+      return;
+    }
+
+    try {
+      final success = await DeviceSyncService.syncReminders(itemsToSync);
+      if (success) {
+        _showSnackBar(_isZh ? '✅ 成功将 ${itemsToSync.length} 条高优待办注入 Apple Reminders' : '✅ Synced ${itemsToSync.length} items to Apple Reminders');
+      }
+    } catch (e) {
+      _showSnackBar(_isZh ? '⚠️ 同步失败，请确保已授予提醒事项权限' : '⚠️ Sync failed. Check Reminders permissions.');
+    }
   }
 
   // 壁垒3：天才构想主动提醒 —— 检测新记录与历史记录间的高频关联概念，
@@ -729,7 +792,7 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
       final file = File(_localAudioPath!);
       if (await file.exists()) {
         MobileSoundService().playSuck();
-        // 壁垒1：倾泻与整理绝对分离 —— 录音一停立即返回，后台异步整理，不阻塞 UI
+        // 壁垒1：倾泻与整理绝对分离 (Decoupling Dump and Restructure) —— 录音一停立即返回，后台异步整理，不阻塞 UI
         unawaited(_uploadAndProcessAudio(file));
       }
     }
@@ -831,8 +894,6 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
       // 直接弹出结果详情页
       _showRestructuredDetailsSheet();
     } catch (e) {
-      // 关闭 Loading Sheet
-      Navigator.pop(context);
       setState(() {
         _status = 'error';
         _errorMsg = e.toString().replaceFirst('Exception: ', '');
@@ -881,7 +942,7 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
   }
 
   // 弹出录音 BottomSheet (手机一键倾倒)
-  void _showRecordingSheet() {
+  void _showRecordingSheet({bool autoStart = false}) {
     showModalBottomSheet(
       context: context,
       isDismissible: !_isRecording,
@@ -892,57 +953,84 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
       builder: (context) {
         return StatefulBuilder(
           builder: (context, setSheetState) {
-            return Container(
-              padding: const EdgeInsets.all(24),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const SizedBox(height: 12),
-                  // 发光呼吸环
-                  Container(
-                    width: 80,
-                    height: 80,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      gradient: const LinearGradient(
-                        colors: [Colors.purpleAccent, Colors.pinkAccent],
-                      ),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.purpleAccent.withOpacity(0.5),
-                          blurRadius: 20,
-                          spreadRadius: 6,
+            // 自动开启录音（从 Widget/Shortcut 唤醒时）
+            if (autoStart) {
+              autoStart = false; // 确保只触发一次
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                if (mounted) {
+                  _ensureConsentThenRecord(onGranted: () => setSheetState(() {}));
+                }
+              });
+            }
+
+            return StreamBuilder<int>(
+              stream: Stream.periodic(const Duration(seconds: 1), (i) => _recordingDuration),
+              builder: (context, snapshot) {
+                return Container(
+                  padding: const EdgeInsets.all(24),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const SizedBox(height: 12),
+                      Container(
+                        width: 80,
+                        height: 80,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          gradient: const LinearGradient(
+                            colors: [Colors.purpleAccent, Colors.pinkAccent],
+                          ),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.purpleAccent.withOpacity(0.5),
+                              blurRadius: 20,
+                              spreadRadius: 6,
+                            ),
+                          ],
                         ),
-                      ],
-                    ),
-                    child: IconButton(
-                      icon: Icon(_isRecording ? Icons.stop : Icons.mic, color: Colors.white, size: 36),
-                      onPressed: () async {
-                        if (_isRecording) {
-                          await _stopRecording();
-                          Navigator.pop(context); // 录音完成关闭
-                        } else {
-                          await _ensureConsentThenRecord(onGranted: () => setSheetState(() {}));
-                        }
-                      },
-                    ),
+                        child: IconButton(
+                          icon: Icon(_isRecording ? Icons.stop : Icons.mic, color: Colors.white, size: 36),
+                          onPressed: () async {
+                            if (_isRecording) {
+                              await _stopRecording();
+                              if (mounted) Navigator.pop(context);
+                            } else {
+                              await _ensureConsentThenRecord(onGranted: () => setSheetState(() {}));
+                            }
+                          },
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      Text(
+                        _isRecording ? _formatDuration(_recordingDuration) : '00:00',
+                        style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
+                      ),
+                      const SizedBox(height: 12),
+                      Text(
+                        _isRecording ? '正在倾泻，随时停止...' : '随时准备倾倒',
+                        style: const TextStyle(color: Colors.grey, fontSize: 13),
+                      ),
+                      const SizedBox(height: 24),
+                      if (_isRecording)
+                        const Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            SizedBox(
+                              width: 14,
+                              height: 14,
+                              child: CircularProgressIndicator(color: Colors.pinkAccent, strokeWidth: 2),
+                            ),
+                            SizedBox(width: 8),
+                            Text(
+                              'ADHD 脑波记录中',
+                              style: TextStyle(color: Colors.pinkAccent, fontSize: 12),
+                            )
+                          ],
+                        ),
+                    ],
                   ),
-                  const SizedBox(height: 16),
-                  Text(
-                    _isRecording ? _formatDuration(_recordingDuration) : '00:00',
-                    style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
-                  ),
-                  const SizedBox(height: 12),
-                  Text(
-                    _isRecording
-                        ? (_isZh ? '倾倒中，再次点击按钮完成整理...' : 'Dumping... tap to stop.')
-                        : (_isZh ? '点击上方麦克风开始录音' : 'Tap mic to start'),
-                    style: const TextStyle(color: Colors.grey, fontSize: 13),
-                    textAlign: TextAlign.center,
-                  ),
-                  const SizedBox(height: 16),
-                ],
-              ),
+                );
+              },
             );
           },
         );
@@ -1060,6 +1148,7 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
     final recentDumps = _historyList.take(3).toList(); // 主页取最近 3 条记录
 
     return Scaffold(
+      key: _scaffoldKey,
       backgroundColor: const Color(0xFF09090F), // 极致深紫黑背景
       appBar: AppBar(
         backgroundColor: Colors.transparent,
@@ -1067,7 +1156,7 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
         leading: Builder(
           builder: (context) => IconButton(
             icon: const Icon(Icons.menu, color: Colors.white70),
-            onPressed: () => Scaffold.of(context).openDrawer(),
+            onPressed: () => _scaffoldKey.currentState?.openDrawer(),
           ),
         ),
         title: Row(
@@ -1173,7 +1262,7 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
                             overflow: TextOverflow.ellipsis,
                             style: const TextStyle(color: Colors.white70, fontSize: 13),
                           ),
-                          onTap: () => _loadHistoryRecord(record),
+                          onTap: () => _loadHistoryRecord(record, closeDrawer: true),
                         );
                       },
                     ),
@@ -1255,6 +1344,8 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
+              // 崩溃拦截器常驻红条：若上次崩溃有记录则显示，便于无 Xcode 调试
+              CrashReporter.banner(),
               // 1. 顶栏 Welcome
               Text(
                 _isZh ? 'Welcome Back!' : 'Welcome Back!',
@@ -1464,7 +1555,7 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
                       }
                     }),
                     _buildNeonActionButton(Icons.archive, _isZh ? '箱库' : 'Vault', () {
-                      Scaffold.of(context).openDrawer();
+                      _scaffoldKey.currentState?.openDrawer();
                     }),
                   ],
                 )
@@ -1546,7 +1637,7 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
                       }
                     }),
                     _buildNeonActionButton(Icons.archive, _isZh ? '箱库' : 'Vault', () {
-                      Scaffold.of(context).openDrawer();
+                      _scaffoldKey.currentState?.openDrawer();
                     }),
                   ],
                 )
@@ -1849,7 +1940,7 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
               style: const TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.bold),
             ),
             GestureDetector(
-              onTap: () => Scaffold.of(context).openDrawer(),
+              onTap: () => _scaffoldKey.currentState?.openDrawer(),
               child: Text(
                 _isZh ? '查看全部' : 'See All',
                 style: const TextStyle(color: Colors.purpleAccent, fontSize: 12),

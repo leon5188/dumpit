@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:dumpit_mobile/models/history_record.dart';
+import '../services/auth_service.dart';
 
 class ApiService {
   // Go 后端默认 API 地址
@@ -28,6 +29,12 @@ class ApiService {
   }) async {
     final uri = Uri.parse('$baseUrl/api/process-audio');
     final request = http.MultipartRequest('POST', uri);
+
+    // 后端 /api/process-audio 要求 Authorization: Bearer <session>，否则返回 missing bearer token
+    final sessionToken = await AuthService.getSessionToken();
+    if (sessionToken != null && sessionToken.isNotEmpty) {
+      request.headers['Authorization'] = 'Bearer $sessionToken';
+    }
 
     // 附带音频文件
     final stream = http.ByteStream(audioFile.openRead());

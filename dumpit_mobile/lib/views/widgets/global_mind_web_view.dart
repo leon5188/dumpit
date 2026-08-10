@@ -1,77 +1,42 @@
-import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import '../../models/history_record.dart';
-import '../../services/association.dart';
 
-// 全局脑网：跨记录关联图谱（壁垒3 — 非线性动态双向链接图谱）
-// 中心 = 用户「你」，外围 = 所有记录的概念节点，跨记录共享 2-gram 自动连线。
-class GlobalMindWebView extends StatefulWidget {
+// 全局脑网改版：摒弃容易杂乱的画布连线，改为将跨记录的「关键洞察 (Key Insights)」
+// 统一聚合，按重要度或时间排布，做到「一条一条清晰地列出来」。
+class GlobalMindWebView extends StatelessWidget {
   final List<HistoryRecord> historyList;
   final String? activeRecordId;
+  final bool isZh;
 
   const GlobalMindWebView({
     super.key,
     required this.historyList,
     this.activeRecordId,
+    required this.isZh,
   });
-
-  @override
-  State<GlobalMindWebView> createState() => _GlobalMindWebViewState();
-}
-
-class _GlobalMindWebViewState extends State<GlobalMindWebView> {
-  final List<_GNode> _nodes = [];
-  final List<_GEdge> _edges = [];
-  Size _canvasSize = const Size(500, 320);
-  String? _draggedId;
-
-  @override
-  void initState() {
-    super.initState();
-    _buildGraph();
-  }
-
-  @override
-  void didUpdateWidget(covariant GlobalMindWebView oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (oldWidget.historyList != widget.historyList) _buildGraph();
-  }
-
-  void _buildGraph() {
-    _nodes.clear();
-    _edges.clear();
-    final result = AssociationService.analyze(widget.historyList);
-    // 用关联结果直接建图
-    for (final node in result.nodes) {
-      _nodes.add(_GNode(
-        id: node.id,
-        label: node.text,
-        type: node.isAction ? 'todo' : (node.isInfo ? 'info' : 'insight'),
-        importance: node.importance,
-        recordId: node.recordId,
-      ));
-    }
-    for (final link in result.links) {
-      _edges.add(_GEdge(a: link.a, b: link.b, weight: link.shared));
-    }
-    _layout();
-  }
-
-  // 环形布局：中心「你」+ 节点均匀散布
-  void _layout() {
-    if (_nodes.isEmpty) return;
-    final cx = _canvasSize.width / 2;
-    final cy = _canvasSize.height / 2;
-    final r = math.min(cx, cy) - 30;
-    for (var i = 0; i < _nodes.length; i++) {
-      final angle = (i / _nodes.length) * 2 * math.pi;
-      _nodes[i].offset = Offset(cx + r * math.cos(angle), cy + r * math.sin(angle));
-    }
-  }
 
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    // 收集所有有效记录的关键洞察
+    final List<Map<String, dynamic>> allInsights = [];
+    for (var r in historyList) {
+      if (r.folder != 'trash') {
+        for (var insight in r.keyInsights) {
+          allInsights.add({
+            'text': insight.text,
+            'importance': insight.importance,
+            'recordId': r.id,
+            'date': r.timestamp,
+          });
+        }
+      }
+    }
+
+    // 按重要度排序，优先展示最关键的启发
+    allInsights.sort((a, b) => (b['importance'] as double).compareTo(a['importance'] as double));
+
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -85,118 +50,89 @@ class _GlobalMindWebViewState extends State<GlobalMindWebView> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
-            children: const [
-              Icon(Icons.hub_outlined, color: Colors.purpleAccent, size: 20),
-              SizedBox(width: 8),
-              Text('🕸️ 全局脑网（跨记录关联）', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+            children: [
+              const Icon(Icons.hub_outlined, color: Colors.purpleAccent, size: 20),
+              const SizedBox(width: 8),
+              Text(isZh ? '🕸️ 全局思维洞察 (核心梳理)' : '🕸️ Global Insights', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
             ],
           ),
           const SizedBox(height: 6),
           Text(
-            'AI 自动把不同次倾泻里共享的主题连线 —— 越用越懂你',
-            style: TextStyle(fontSize: 11, color: Colors.grey[500]),
+            isZh ? '这里汇聚了你过去所有的核心启发，不再散落各处，真正构建你的智库。' : 'All your key insights gathered across time, building your personal knowledge base.',
+            style: const TextStyle(fontSize: 12, color: Colors.grey),
           ),
-          const SizedBox(height: 12),
-          if (_nodes.isEmpty)
-            const Padding(
-              padding: EdgeInsets.symmetric(vertical: 20),
-              child: Center(child: Text('倾泻更多想法后，这里会连成你的专属大脑', style: TextStyle(color: Colors.grey))),
+          const SizedBox(height: 16),
+          if (allInsights.isEmpty)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 20),
+              child: Center(
+                child: Text(isZh ? '倾泻更多想法后，AI提取的关键洞察将在这里汇总。' : 'Dump more thoughts, and AI-extracted insights will appear here.', style: const TextStyle(color: Colors.grey, fontSize: 13)),
+              ),
             )
           else
-            SizedBox(
-              height: 320,
-              width: double.infinity,
-              child: Center(
-                child: SizedBox(
-                  width: 500,
-                  height: 320,
-                  child: CustomPaint(
-                    size: const Size(500, 320),
-                    painter: _GWebPainter(
-                      nodes: _nodes,
-                      edges: _edges,
-                      activeRecordId: widget.activeRecordId,
-                      isDark: isDark,
+            ListView.builder(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              itemCount: allInsights.length,
+              itemBuilder: (context, index) {
+                final insight = allInsights[index];
+                final bool isActive = insight['recordId'] == activeRecordId;
+                final bool isHot = insight['importance'] >= 0.7;
+
+                return Container(
+                  margin: const EdgeInsets.only(bottom: 12),
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: isActive 
+                        ? Colors.purpleAccent.withOpacity(0.15) 
+                        : (isDark ? Colors.black.withOpacity(0.2) : Colors.white),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: isActive 
+                          ? Colors.purpleAccent.withOpacity(0.5) 
+                          : (isDark ? Colors.white.withOpacity(0.05) : Colors.black.withOpacity(0.05)),
                     ),
                   ),
-                ),
-              ),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Padding(
+                        padding: const EdgeInsets.only(top: 2),
+                        child: Icon(
+                          isHot ? Icons.local_fire_department : Icons.lightbulb_outline,
+                          size: 16,
+                          color: isHot ? Colors.orangeAccent : Colors.purpleAccent,
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              insight['text'],
+                              style: TextStyle(
+                                fontSize: 14,
+                                height: 1.4,
+                                color: isDark ? Colors.white : Colors.black87,
+                                fontWeight: isHot ? FontWeight.w600 : FontWeight.normal,
+                              ),
+                            ),
+                            const SizedBox(height: 6),
+                            Text(
+                              isZh ? '源自 · ${insight['date']}' : 'From · ${insight['date']}',
+                              style: const TextStyle(fontSize: 11, color: Colors.grey),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              },
             ),
         ],
       ),
     );
   }
-}
-
-class _GNode {
-  final String id;
-  final String label;
-  final String type;
-  final double importance;
-  final String recordId;
-  Offset offset;
-  _GNode({
-    required this.id,
-    required this.label,
-    required this.type,
-    required this.importance,
-    required this.recordId,
-    this.offset = Offset.zero,
-  });
-}
-
-class _GEdge {
-  final String a;
-  final String b;
-  final int weight;
-  _GEdge({required this.a, required this.b, required this.weight});
-}
-
-class _GWebPainter extends CustomPainter {
-  final List<_GNode> nodes;
-  final List<_GEdge> edges;
-  final String? activeRecordId;
-  final bool isDark;
-
-  _GWebPainter({required this.nodes, required this.edges, this.activeRecordId, required this.isDark});
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final center = Offset(size.width / 2, size.height / 2);
-    // 中心枢纽「你」
-    canvas.drawCircle(center, 22, Paint()..color = Colors.purpleAccent.withOpacity(0.25));
-    canvas.drawCircle(center, 12, Paint()..color = isDark ? const Color(0xFF1E1E2F) : Colors.white);
-    canvas.drawCircle(center, 12, Paint()..color = Colors.purpleAccent.withOpacity(0.8)..style = PaintingStyle.stroke..strokeWidth = 1.6);
-
-    final nodeById = {for (var n in nodes) n.id: n};
-    // 边
-    for (final e in edges) {
-      final na = nodeById[e.a];
-      final nb = nodeById[e.b];
-      if (na == null || nb == null) continue;
-      final isActive = activeRecordId != null && (na.recordId == activeRecordId || nb.recordId == activeRecordId);
-      canvas.drawLine(
-        na.offset,
-        nb.offset,
-        Paint()
-          ..color = (isActive ? Colors.amberAccent : Colors.purpleAccent).withOpacity(isActive ? 0.55 : 0.18)
-          ..strokeWidth = isActive ? 2.0 : 1.0,
-      );
-    }
-    // 节点
-    for (final n in nodes) {
-      final isActive = activeRecordId != null && n.recordId == activeRecordId;
-      final color = n.importance >= 0.7
-          ? Colors.redAccent
-          : (n.type == 'todo'
-              ? Colors.greenAccent
-              : (n.type == 'info' ? Colors.cyanAccent : Colors.purpleAccent));
-      final r = 4.0 + n.importance * 5.0;
-      canvas.drawCircle(n.offset, r + 3, Paint()..color = color.withOpacity(0.3));
-      canvas.drawCircle(n.offset, r, Paint()..color = isActive ? Colors.amberAccent : color);
-    }
-  }
-
-  @override
-  bool shouldRepaint(covariant _GWebPainter old) => old.nodes != nodes || old.edges != edges || old.activeRecordId != activeRecordId;
 }

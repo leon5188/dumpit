@@ -2,12 +2,30 @@ import 'package:flutter/material.dart';
 import '../../models/history_record.dart';
 
 class InfoManager extends StatelessWidget {
-  final List<ImportanceItem> infoItems;
+  final List<HistoryRecord> historyList;
+  final String? activeRecordId;
+  final bool isZh;
 
-  const InfoManager({super.key, required this.infoItems});
+  const InfoManager({
+    super.key,
+    required this.historyList,
+    required this.activeRecordId,
+    required this.isZh,
+  });
 
   @override
   Widget build(BuildContext context) {
+    // 聚合全局 infoItems
+    final allInfos = <ImportanceItem>[];
+    for (var r in historyList) {
+      if (r.folder != 'trash') {
+        allInfos.addAll(r.infoItems);
+      }
+    }
+    // 简易去重/按重要度排序
+    final sortedInfos = allInfos.toSet().toList()
+      ..sort((a, b) => b.importance.compareTo(a.importance));
+
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Container(
@@ -23,26 +41,26 @@ class InfoManager extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
-            children: const [
-              Icon(Icons.info_outline, color: Colors.cyanAccent, size: 20),
-              SizedBox(width: 8),
+            children: [
+              const Icon(Icons.info_outline, color: Colors.cyanAccent, size: 20),
+              const SizedBox(width: 8),
               Text(
-                '💡 原生备忘信息',
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                isZh ? '💡 全局备忘知识库' : '💡 Global Knowledge Base',
+                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
               ),
             ],
           ),
           const SizedBox(height: 12),
-          if (infoItems.isEmpty)
-            const Padding(
-              padding: EdgeInsets.symmetric(vertical: 8),
+          if (sortedInfos.isEmpty)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 8),
               child: Text(
-                '没有需要记住的备忘信息',
-                style: TextStyle(fontSize: 13, color: Colors.grey),
+                isZh ? '全局未提取到需要记住的备忘信息' : 'No general information extracted.',
+                style: const TextStyle(fontSize: 13, color: Colors.grey),
               ),
             )
           else
-            ...infoItems.map((item) {
+            ...sortedInfos.map((item) {
               final isHot = item.importance >= 0.7;
               return Padding(
                 padding: const EdgeInsets.symmetric(vertical: 5),

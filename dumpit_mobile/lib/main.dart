@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:path_provider/path_provider.dart';
 import 'firebase_options.dart';
 import 'views/home_page.dart';
+import 'crash_reporter.dart';
 
 void _cleanLegacyTempFiles() async {
   try {
@@ -21,6 +22,7 @@ void _cleanLegacyTempFiles() async {
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  CrashReporter.install(); // 安装全局崩溃拦截，死机后重开 App 可截图报错
   try {
     await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
     debugPrint('✅ Firebase initialized');
@@ -64,6 +66,14 @@ class BrainVentApp extends StatelessWidget {
           indicatorSize: TabBarIndicatorSize.tab,
         ),
       ),
+      // ⚠️ 兜底：任何未注册的命名路由都导向首页，避免 _onUnknownRoute 为 null 强制解包崩溃（黑屏死机）
+      onUnknownRoute: (settings) {
+        debugPrint('⚠️ Unknown route requested: ${settings.name}');
+        return MaterialPageRoute(
+          builder: (_) => const HomePage(),
+          settings: const RouteSettings(name: '/'),
+        );
+      },
       home: const HomePage(),
     );
   }

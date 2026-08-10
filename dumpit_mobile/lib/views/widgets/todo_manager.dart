@@ -1,15 +1,24 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../../models/history_record.dart';
 import '../../services/mobile_sound_service.dart';
 
 class TodoManager extends StatefulWidget {
-  final List<ImportanceItem> actionItems;
+  final List<HistoryRecord> historyList;
+  final String? activeRecordId;
+  final bool isZh;
   final Function(List<ImportanceItem>) onTodosChanged;
+  final Function(String)? onGlobalTodoDeleted;
+  final Function(ImportanceItem, bool)? onTodoChecked;
 
   const TodoManager({
     super.key,
-    required this.actionItems,
+    required this.historyList,
+    required this.activeRecordId,
+    required this.isZh,
     required this.onTodosChanged,
+    this.onGlobalTodoDeleted,
+    this.onTodoChecked,
   });
 
   @override
@@ -18,41 +27,60 @@ class TodoManager extends StatefulWidget {
 
 class _TodoManagerState extends State<TodoManager> {
   final TextEditingController _controller = TextEditingController();
-  final Map<int, bool> _checkedMap = {};
+  late List<HistoryRecord> _localHistoryList;
+  final Set<String> _checkedSet = {}; // 用 Set 管理多个正在消失的任务
 
-  // 按重要度降序（重要的排前面），保持索引可对应
-  List<ImportanceItem> get _sorted => List<ImportanceItem>.from(widget.actionItems)
-    ..sort((a, b) => b.importance.compareTo(a.importance));
+  @override
+  void initState() {
+    super.initState();
+    _localHistoryList = List.from(widget.historyList);
+  }
+
+  // 合并全局 actionItems
+  List<ImportanceItem> get _sorted {
+    final allItems = <ImportanceItem>[];
+    for (var r in _localHistoryList) {
+      if (r.folder != 'trash') {
+        allItems.addAll(r.actionItems);
+      }
+    }
+    return allItems..sort((a, b) => b.importance.compareTo(a.importance));
+  }
 
   void _addTodo() {
     final text = _controller.text.trim();
     if (text.isEmpty) return;
 
-    final updated = List<ImportanceItem>.from(widget.actionItems)
-      ..add(ImportanceItem(text: text, importance: 0.5));
-    widget.onTodosChanged(updated);
+    if (widget.activeRecordId != null) {
+      final activeIndex = _localHistoryList.indexWhere((r) => r.id == widget.activeRecordId);
+      if (activeIndex != -1) {
+        final active = _localHistoryList[activeIndex];
+        final updated = List<ImportanceItem>.from(active.actionItems)
+          ..insert(0, ImportanceItem(text: text, importance: 0.5));
+        setState(() {
+          _localHistoryList[activeIndex] = active.copyWith(actionItems: updated);
+        });
+        widget.onTodosChanged(updated);
+      }
+    }
     _controller.clear();
   }
 
-  void _deleteTodo(int index) {
-    final sorted = _sorted;
-    final removed = sorted[index];
-    final updated = List<ImportanceItem>.from(widget.actionItems)..remove(removed);
-    setState(() {
-      _checkedMap.remove(index);
-      // 索引需要重新对齐
-      final temp = <int, bool>{};
-      _checkedMap.forEach((key, val) {
-        if (key > index) {
-          temp[key - 1] = val;
-        } else if (key < index) {
-          temp[key] = val;
+  void _deleteTodo(ImportanceItem todo) {
+    for (int i = 0; i < _localHistoryList.length; i++) {
+      final r = _localHistoryList[i];
+      if (r.folder != 'trash' && r.actionItems.any((e) => e.text == todo.text)) {
+        final updated = List<ImportanceItem>.from(r.actionItems)..removeWhere((e) => e.text == todo.text);
+        setState(() {
+          _localHistoryList[i] = r.copyWith(actionItems: updated);
+        });
+        if (r.id == widget.activeRecordId) {
+          widget.onTodosChanged(updated);
+        } else {
+          widget.onGlobalTodoDeleted?.call(todo.text);
         }
-      });
-      _checkedMap.clear();
-      _checkedMap.addAll(temp);
-    });
-    widget.onTodosChanged(updated);
+      }
+    }
   }
 
   @override
@@ -73,22 +101,21 @@ class _TodoManagerState extends State<TodoManager> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
-            children: const [
-              Icon(Icons.check_circle_outline, color: Colors.purpleAccent, size: 20),
-              SizedBox(width: 8),
+            children: [
+              const Icon(Icons.check_circle_outline, color: Colors.purpleAccent, size: 20),
+              const SizedBox(width: 8),
               Text(
-                '✅ 原生待办事项管理器',
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                widget.isZh ? '✅ 全局待办事项 (跨记录汇总)' : '✅ Global Todos',
+                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
               ),
             ],
           ),
-          const SizedBox(height: 12),
-          if (widget.actionItems.isEmpty)
-            const Padding(
-              padding: EdgeInsets.symmetric(vertical: 8),
-              child: Text(
-                '双击这里或下方添加你的第一个具体行动...',
-                style: TextStyle(fontSize: 13, color: Colors.grey),
+          const SizedBox(height: 16),
+          if (sorted.isEmpty)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 20),
+              child: Center(
+                child: Text(widget.isZh ? '没有待办事项' : 'No Action Items', style: const TextStyle(color: Colors.grey)),
               ),
             )
           else
@@ -98,111 +125,115 @@ class _TodoManagerState extends State<TodoManager> {
               itemCount: sorted.length,
               itemBuilder: (context, index) {
                 final todo = sorted[index];
-                final isChecked = _checkedMap[index] ?? false;
-                final isHot = todo.importance >= 0.7; // 高重要度 → 红色 ⚡ 高亮
+                final isChecked = _checkedSet.contains(todo.text);
+                final isHot = todo.importance >= 0.7;
 
-                return Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 4),
-                  child: Row(
-                    children: [
-                      GestureDetector(
-                        onTap: () {
-                          setState(() {
-                            _checkedMap[index] = !isChecked;
-                          });
-                          MobileSoundService().playChime();
-                        },
-                        child: Container(
-                          width: 20,
-                          height: 20,
-                          decoration: BoxDecoration(
-                            borderRadius: BorderRadius.circular(6),
-                            border: Border.all(
-                              color: isChecked ? Colors.pinkAccent : (isHot ? Colors.redAccent : Colors.grey),
-                              width: 1.5,
+                return AnimatedOpacity(
+                  duration: const Duration(milliseconds: 300),
+                  opacity: isChecked ? 0.0 : 1.0, // 消消乐变透明
+                  child: Container(
+                    margin: const EdgeInsets.only(bottom: 8),
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                    decoration: BoxDecoration(
+                      color: isDark ? Colors.black.withOpacity(0.2) : Colors.white,
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(
+                        color: isHot ? Colors.orangeAccent.withOpacity(0.3) : (isDark ? Colors.white.withOpacity(0.05) : Colors.black.withOpacity(0.05)),
+                      ),
+                    ),
+                    child: Row(
+                      children: [
+                        GestureDetector(
+                          onTap: () {
+                            if (isChecked) return; // 防止重复点击
+                            setState(() {
+                              _checkedSet.add(todo.text);
+                            });
+                            MobileSoundService().playChime();
+                            if (isHot) {
+                              HapticFeedback.heavyImpact(); // 强烈震动
+                            } else {
+                              HapticFeedback.mediumImpact();
+                            }
+                            widget.onTodoChecked?.call(todo, true);
+                            
+                            // 延迟彻底删除它
+                            Future.delayed(const Duration(milliseconds: 500), () {
+                              if (mounted && _checkedSet.contains(todo.text)) {
+                                _checkedSet.remove(todo.text);
+                                _deleteTodo(todo);
+                              }
+                            });
+                          },
+                          child: Container(
+                            width: 22,
+                            height: 22,
+                            margin: const EdgeInsets.only(right: 12),
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              border: Border.all(
+                                color: isHot ? Colors.orangeAccent : Colors.purpleAccent,
+                                width: 2,
+                              ),
+                              color: isChecked ? (isHot ? Colors.orangeAccent : Colors.purpleAccent) : Colors.transparent,
                             ),
-                            color: isChecked ? Colors.pinkAccent.withOpacity(0.2) : Colors.transparent,
-                          ),
-                          child: isChecked
-                              ? const Icon(Icons.check, size: 14, color: Colors.pinkAccent)
-                              : null,
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      if (isHot)
-                        const Padding(
-                          padding: EdgeInsets.only(right: 4),
-                          child: Text('⚡', style: TextStyle(fontSize: 13)),
-                        ),
-                      Expanded(
-                        child: Text(
-                          todo.text,
-                          style: TextStyle(
-                            fontSize: 14,
-                            decoration: isChecked ? TextDecoration.lineThrough : null,
-                            color: isChecked ? Colors.grey : (isHot ? Colors.redAccent : null),
-                            fontWeight: isHot ? FontWeight.bold : null,
+                            child: isChecked
+                                ? const Icon(Icons.check, size: 14, color: Colors.white)
+                                : null,
                           ),
                         ),
-                      ),
-                      IconButton(
-                        icon: const Icon(Icons.close, size: 18, color: Colors.redAccent),
-                        onPressed: () => _deleteTodo(index),
-                        padding: EdgeInsets.zero,
-                        constraints: const BoxConstraints(),
-                      ),
-                    ],
+                        Expanded(
+                          child: Text(
+                            todo.text,
+                            style: TextStyle(
+                              fontSize: 14,
+                              color: isHot ? Colors.orangeAccent : (isDark ? Colors.white : Colors.black87),
+                              fontWeight: isHot ? FontWeight.bold : null,
+                            ),
+                          ),
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.close, size: 18, color: Colors.redAccent),
+                          onPressed: () => _deleteTodo(todo),
+                          padding: EdgeInsets.zero,
+                          constraints: const BoxConstraints(),
+                        ),
+                      ],
+                    ),
                   ),
                 );
               },
             ),
           const SizedBox(height: 12),
-          Row(
-            children: [
-              Expanded(
-                child: TextField(
-                  controller: _controller,
-                  decoration: InputDecoration(
-                    hintText: '输入具体行动，回车添加...',
-                    hintStyle: const TextStyle(fontSize: 13, color: Colors.grey),
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                    filled: true,
-                    fillColor: isDark ? Colors.black.withOpacity(0.2) : Colors.white,
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(8),
-                      borderSide: BorderSide(
-                        color: isDark ? Colors.white.withOpacity(0.1) : Colors.black.withOpacity(0.1),
-                      ),
-                    ),
-                    enabledBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(8),
-                      borderSide: BorderSide(
-                        color: isDark ? Colors.white.withOpacity(0.08) : Colors.black.withOpacity(0.05),
-                      ),
-                    ),
-                  ),
-                  style: const TextStyle(fontSize: 13),
-                  onSubmitted: (_) => _addTodo(),
-                ),
-              ),
-              const SizedBox(width: 8),
-              ElevatedButton(
+          TextField(
+            controller: _controller,
+            style: const TextStyle(fontSize: 14),
+            decoration: InputDecoration(
+              hintText: widget.isZh ? '添加新待办...' : 'Add a new todo...',
+              hintStyle: const TextStyle(color: Colors.grey, fontSize: 14),
+              isDense: true,
+              contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              filled: true,
+              fillColor: isDark ? Colors.black.withOpacity(0.2) : Colors.white,
+              border: OutlineBinding.circular(8, isDark ? Colors.white24 : Colors.black12),
+              suffixIcon: IconButton(
+                icon: const Icon(Icons.add_circle_outline, color: Colors.purpleAccent),
                 onPressed: _addTodo,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.purpleAccent,
-                  foregroundColor: Colors.white,
-                  minimumSize: const Size(40, 40),
-                  padding: EdgeInsets.zero,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                ),
-                child: const Icon(Icons.add, size: 20),
               ),
-            ],
+            ),
+            onSubmitted: (_) => _addTodo(),
           ),
         ],
       ),
+    );
+  }
+}
+
+class OutlineBinding {
+  static OutlineInputBorder circular(double r, Color c) {
+    return OutlineInputBorder(
+      borderRadius: BorderRadius.circular(r),
+      borderSide: BorderSide(color: c),
     );
   }
 }

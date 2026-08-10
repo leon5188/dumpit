@@ -7,49 +7,59 @@ class BinauralPlayer {
   private let audioEngine = AVAudioEngine()
   private var sourceNode: AVAudioSourceNode?
   private var isPlaying = false
-  
-  func start() {
+
+  // 安全启动：任何失败都吞掉，绝不冒泡到原生层导致崩溃
+  func startSafely() throws {
     guard !isPlaying else { return }
     let sampleRate = 44100.0
     var phaseLeft = 0.0
     var phaseRight = 0.0
     let freqLeft = 400.0
     let freqRight = 408.0 // 8Hz Alpha 波差频，可辅助 ADHD 深度专注
-    
+
     sourceNode = AVAudioSourceNode { (_, _, frameCount, audioBufferList) -> OSStatus in
       let abl = UnsafeMutableAudioBufferListPointer(audioBufferList)
       guard let leftBuffer = abl[0].mData?.assumingMemoryBound(to: Float.self),
             let rightBuffer = abl[1].mData?.assumingMemoryBound(to: Float.self) else {
         return noErr
       }
-      
+
       for frame in 0..<Int(frameCount) {
         let sampleLeft = sin(phaseLeft) * 0.12 // 柔和的音量大小
         let sampleRight = sin(phaseRight) * 0.12
-        
+
         leftBuffer[frame] = Float(sampleLeft)
         rightBuffer[frame] = Float(sampleRight)
-        
+
         phaseLeft += 2.0 * .pi * freqLeft / sampleRate
         phaseRight += 2.0 * .pi * freqRight / sampleRate
       }
       return noErr
     }
-    
+
     guard let node = sourceNode else { return }
-    let format = AVAudioFormat(standardFormatWithSampleRate: 44100.0, channels: 2)!
+    // 用 guard 解包替代强制解包 !，格式创建失败时不 crash
+    guard let format = AVAudioFormat(standardFormatWithSampleRate: 44100.0, channels: 2) else {
+      return
+    }
     audioEngine.attach(node)
     audioEngine.connect(node, to: audioEngine.outputNode, format: format)
-    
+
+    // 激活音频会话，避免在未激活状态下 start() 抛异常
+    try? AVAudioSession.sharedInstance().setCategory(.playback, mode: .default)
+    try? AVAudioSession.sharedInstance().setActive(true)
+
     do {
       try audioEngine.start()
       isPlaying = true
     } catch {
-      // Audio engine start failed
+      // Audio engine start failed —— 静默失败，不崩溃
+      isPlaying = false
     }
   }
-  
-  func stop() {
+
+  // 安全停止：已停止或未启动都不操作，绝不抛异常
+  func stopSafely() {
     guard isPlaying else { return }
     audioEngine.stop()
     if let node = sourceNode {
@@ -57,6 +67,7 @@ class BinauralPlayer {
     }
     sourceNode = nil
     isPlaying = false
+    try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
   }
 }
 
@@ -160,10 +171,15 @@ class BinauralPlayer {
           result(FlutterError(code: "INVALID_ARGS", message: "Missing play argument", details: nil))
           return
         }
-        if play {
-          self.focusPlayer.start()
-        } else {
-          self.focusPlayer.stop()
+        // 防御：任何异常都不能冒泡到原生层导致 App 崩溃
+        do {
+          if play {
+            try self.focusPlayer.startSafely()
+          } else {
+            self.focusPlayer.stopSafely()
+          }
+        } catch {
+          // 音频引擎不可用（如后台/其他 App 占用）时静默失败，绝不崩溃
         }
         result(nil)
       } else {
