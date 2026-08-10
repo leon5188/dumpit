@@ -56,9 +56,12 @@ platform :ios do
       end
     end
 
+    # Tell upload_to_testflight to look in the default flutter ipa output path
+    # relative to the project root (where fastlane runs from).
     upload_to_testflight(
+      ipa: "../build/ios/ipa/brainvent.ipa",
       api_key_path: api_key_json,
-      skip_waiting_for_build_processing: false,
+      skip_waiting_for_build_processing: true,
       distribute_external: false
     )
   end
