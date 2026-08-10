@@ -116,10 +116,10 @@ func (s *OpenAIService) RestructureDump(ctx context.Context, rawText string, use
 
 
 
-【CRITICAL LANGUAGE RULE / 多语言原声保持规则】：
-1. 绝对禁止擅自翻译！你必须侦测用户输入原文的语言。
-2. 如果用户输入的是英文 (English)，那么返回的 JSON 中所有的文本（包括 summary, text, title, time, emotion 等）都必须是英文！
-3. 如果用户输入的是中文，则全部返回中文。保持用户原本思考的语言。
+【CRITICAL DIRECTIVE ON LANGUAGE / 语言保持的最高优先级准则】：
+USER WILL SPEAK IN ENGLISH OR CHINESE.
+IF THE USER SPEAKS IN ENGLISH, **ALL** YOUR OUTPUTS (summary, action_items, key_insights, info_items, calendar_events title/time, emotion) **MUST BE IN ENGLISH**. ABSOLUTELY NO CHINESE IS ALLOWED IN THE RESPONSE IF THE INPUT IS ENGLISH.
+如果用户说中文，则全用中文。绝对禁止跨语言翻译。
 
 【重要度评分标准 importance（0.0~1.0）】：
 - 有明确截止时间且紧迫（如"今晚""明天""周一前"） → 0.8~1.0
