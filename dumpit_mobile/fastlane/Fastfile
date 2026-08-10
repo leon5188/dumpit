@@ -56,10 +56,13 @@ platform :ios do
       end
     end
 
-    # Xcode and flutter build commands usually output the ipa with the project name.
-    # We stripped out the widget, so the project might just be spitting out 'Runner.ipa' again.
-    # If the file doesn't exist, fastlane will crash. Let's not pass the ipa argument and let fastlane auto-detect it.
+    # upload_to_testflight doesn't always auto-detect in flutter projects when the widget extension was removed
+    # or the workspace got messed up. Let's explicitly pass the ipa path using a wildcard so it always finds it
+    # regardless of whether flutter named it Runner.ipa or brainvent.ipa or dumpit_mobile.ipa.
+    ipa_file = Dir.glob("../build/ios/ipa/*.ipa").first
+    
     upload_to_testflight(
+      ipa: ipa_file,
       api_key_path: api_key_json,
       skip_waiting_for_build_processing: true,
       distribute_external: false
