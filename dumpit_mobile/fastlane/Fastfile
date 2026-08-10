@@ -56,10 +56,10 @@ platform :ios do
       end
     end
 
-    # Tell upload_to_testflight to look in the default flutter ipa output path
-    # relative to the project root (where fastlane runs from).
+    # Xcode and flutter build commands usually output the ipa with the project name.
+    # We stripped out the widget, so the project might just be spitting out 'Runner.ipa' again.
+    # If the file doesn't exist, fastlane will crash. Let's not pass the ipa argument and let fastlane auto-detect it.
     upload_to_testflight(
-      ipa: "../build/ios/ipa/brainvent.ipa",
       api_key_path: api_key_json,
       skip_waiting_for_build_processing: true,
       distribute_external: false
