@@ -78,8 +78,9 @@ func (s *OpenAIService) TranscribeAudio(ctx context.Context, audioFilePath strin
 	req := openai.AudioRequest{
 		Model:    openai.Whisper1,
 		FilePath: audioFilePath,
-		// 使用英语 prompt 强行引导模型输出英语（如果不提供 language 参数，Whisper 会根据 prompt 的语言偏向来检测）
-		Prompt: "Hello, this is a voice memo. Please transcribe the audio exactly as spoken in its original language. Do not translate.",
+		// 绝对不要加任何 Prompt！Whisper 的 Prompt 是用来提供“上一句台词”上下文的，不是给它下达指令的！
+		// 加上带有英文和指令的 Prompt 会导致 Whisper 在遇到短语音（如 "Hi how are you"）时彻底精神错乱，
+		// 从而产生经典的 Whisper 幻觉（如随机吐出 "今天要洗衣服吗" 这种毫不相干的训练集字幕数据）。
 	}
 
 	resp, err := s.client.CreateTranscription(ctx, req)
