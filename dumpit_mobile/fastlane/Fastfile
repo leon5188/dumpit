@@ -47,9 +47,7 @@ platform :ios do
       end
     end
 
-    ipa_path = File.expand_path("../build/ios/ipa/brainvent.ipa", __dir__)
     upload_to_testflight(
-      ipa: ipa_path,
       api_key_path: api_key_json,
       skip_waiting_for_build_processing: false,
       distribute_external: false
