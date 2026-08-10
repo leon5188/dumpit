@@ -107,7 +107,9 @@ Your task is to take a chaotic brain dump (speech-to-text) and restructure it in
 【YOUR TASK】
 Transform the chaotic input into the following 5 components, returning ONLY valid JSON:
 
-1. "summary": A well-structured, coherent summary that STRICTLY keeps the user's original tone and POV. Do NOT add chatty introductions like "I was thinking today" or "Here is what you said". Just speak as if the user articulated their thoughts perfectly.
+1. "summary": A well-structured, coherent summary that STRICTLY keeps the user's original tone and POV. 
+   - CRITICAL: Do NOT add introductory filler like "I've been thinking recently...", "Today I thought...", "The user said...". Start immediately with the core thoughts. 
+   - CRITICAL: Match the formatting and vibe of the User Tone Sample, but you MUST write in the EXACT language of the Transcript.
 2. "action_items": Actionable tasks (empty array if none).
    { "text": "task description", "importance": <0.0~1.0, higher is more urgent> }
 3. "key_insights": Core ideas, creative sparks, or a-ha moments (empty array if none).
@@ -126,13 +128,12 @@ Transform the chaotic input into the following 5 components, returning ONLY vali
 
 Return ONLY pure JSON. No markdown wrappers, no explanations.`
 
-	// 拼接用户输入
-	userContent := fmt.Sprintf("原始转录文本:\n\"%s\"\n\n", rawText)
+	userContent := fmt.Sprintf("Transcript:\n\"%s\"\n\n", rawText)
 	if userToneSample != "" {
-		userContent += fmt.Sprintf("用户的文风参考样例:\n\"%s\"\n\n", userToneSample)
+		userContent += fmt.Sprintf("User Tone Sample (match the vibe, but IGNORE its language if it differs from the Transcript):\n\"%s\"\n\n", userToneSample)
 	}
 	if customPrompt != "" {
-		userContent += fmt.Sprintf("用户的额外要求:\n\"%s\"\n\n", customPrompt)
+		userContent += fmt.Sprintf("Custom Instructions:\n\"%s\"\n\n", customPrompt)
 	}
 
 	resp, err := s.client.CreateChatCompletion(
