@@ -78,7 +78,8 @@ func (s *OpenAIService) TranscribeAudio(ctx context.Context, audioFilePath strin
 	req := openai.AudioRequest{
 		Model:    openai.Whisper1,
 		FilePath: audioFilePath,
-		// 移除会误导 Whisper 语言检测的中英混合 Prompt，让其纯净地自动识别语言
+		// 使用英语 prompt 强行引导模型输出英语（如果不提供 language 参数，Whisper 会根据 prompt 的语言偏向来检测）
+		Prompt: "Hello, this is a voice memo. Please transcribe the audio exactly as spoken in its original language. Do not translate.",
 	}
 
 	resp, err := s.client.CreateTranscription(ctx, req)
@@ -96,10 +97,11 @@ func (s *OpenAIService) RestructureDump(ctx context.Context, rawText string, use
 Your task is to take a chaotic brain dump (speech-to-text) and restructure it into a clean JSON format.
 
 【CRITICAL LANGUAGE RULE】
-You MUST output the JSON values in the EXACT SAME LANGUAGE as the user's transcript.
-- If the transcript is in English, ALL outputs (summary, action_items, key_insights, info_items, calendar_events, emotion) MUST BE IN ENGLISH.
-- If the transcript is in Chinese, ALL outputs MUST BE IN CHINESE.
-- DO NOT translate the user's input. Maintain their original language, vocabulary, and thought process.
+1. The user will speak in English, Chinese, or a mix of both.
+2. DO NOT TRANSLATE. You must detect the spoken language(s) from the transcript.
+3. If the transcript is in English, YOU MUST WRITE EVERYTHING (summary, action_items, key_insights, info_items, calendar_events, emotion) IN ENGLISH. Do NOT output Chinese.
+4. If the transcript is in Chinese, write everything in Chinese.
+5. If it's a mix, maintain the exact same mixed vocabulary as the user.
 
 【YOUR TASK】
 Transform the chaotic input into the following 5 components, returning ONLY valid JSON:
