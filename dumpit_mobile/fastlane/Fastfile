@@ -56,11 +56,17 @@ platform :ios do
       end
     end
 
-    # upload_to_testflight doesn't always auto-detect in flutter projects when the widget extension was removed
-    # or the workspace got messed up. Let's explicitly pass the ipa path using a wildcard so it always finds it
-    # regardless of whether flutter named it Runner.ipa or brainvent.ipa or dumpit_mobile.ipa.
-    ipa_file = Dir.glob("../build/ios/ipa/*.ipa").first
+    # GitHub Actions 执行环境与本地不同。在 GitHub Actions 中，
+    # fastlane 的工作目录（`__dir__`）是 `dumpit_mobile/fastlane/`，
+    # 而 `Dir.glob("../build/ios/ipa/*.ipa")` 是相对于执行命令的目录 `dumpit_mobile/`。
+    # 所以我们需要使用以 `__dir__` 为基准的绝对路径来确保万无一失。
+    ipa_dir = File.expand_path("../build/ios/ipa", __dir__)
+    ipa_file = Dir.glob("#{ipa_dir}/*.ipa").first
     
+    unless ipa_file
+      UI.user_error!("Could not find any .ipa file in #{ipa_dir}!")
+    end
+
     upload_to_testflight(
       ipa: ipa_file,
       api_key_path: api_key_json,
